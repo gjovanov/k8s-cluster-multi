@@ -36,11 +36,14 @@ iptables -t nat -A "$OUTPUT_DNAT_CHAIN" -d "$PUBLIC_IP" -p {{ proto }} --dport {
 {% endfor %}
 {% endfor %}
 
+# Skip SNAT for internal cluster traffic (WireGuard mesh)
+iptables -t nat -A "$SNAT_CHAIN" -d 10.10.0.0/16 -j RETURN
+
 # SNAT for relay traffic (preserve source ports)
 iptables -t nat -A "$SNAT_CHAIN" -s "$DEST_IP" -p udp --sport {{ coturn_dnat_rules[host_name].port_ranges[0] }} -j SNAT --to-source "$PUBLIC_IP"
 iptables -t nat -A "$SNAT_CHAIN" -s "$DEST_IP" -p tcp --sport {{ coturn_dnat_rules[host_name].port_ranges[0] }} -j SNAT --to-source "$PUBLIC_IP"
 
-# General SNAT for non-relay outbound
+# General SNAT for non-relay outbound (internet traffic only)
 iptables -t nat -A "$SNAT_CHAIN" -s "$DEST_IP" ! -d {{ coturn_dnat_rules[host_name].vm_subnet }} -j SNAT --to-source "$PUBLIC_IP"
 
 echo "COTURN iptables rules applied for {{ host_name }} ($PUBLIC_IP -> $DEST_IP)"
