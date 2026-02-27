@@ -30,7 +30,6 @@
     kubeadm init
     --config /tmp/kubeadm-config.yml
     --upload-certs
-    --certificate-key={{ k8s_certificate_key }}
   register: kubeadm_init_output
   timeout: 300
   when: not kubeadm_already_init.stat.exists
@@ -99,11 +98,12 @@
     --set kubeProxyReplacement=true
     --set k8sServiceHost=127.0.0.1
     --set k8sServicePort={{ haproxy_frontend_port }}
-    --set tunnel=vxlan
+    --set routingMode=tunnel
+    --set tunnelProtocol=vxlan
     --set bpf.masquerade=true
     --set MTU={{ cilium_mtu }}
     --set ipam.operator.clusterPoolIPv4PodCIDRList={{ k8s_pod_cidr }}
-    --set operator.replicas={{ cilium_operator_replicas }}
+    --set operator.replicas=1
   become: true
   become_user: ubuntu
   environment:

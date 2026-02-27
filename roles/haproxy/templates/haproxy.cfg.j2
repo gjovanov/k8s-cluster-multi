@@ -9,9 +9,10 @@ defaults
     option  tcplog
     option  dontlognull
     timeout connect 5s
-    timeout client  30s
-    timeout server  30s
+    timeout client  300s
+    timeout server  300s
     retries 3
+    option  redispatch
 
 frontend k8s-api
     bind 127.0.0.1:{{ haproxy_frontend_port }}
@@ -20,6 +21,10 @@ frontend k8s-api
 backend k8s-masters
     option tcp-check
     balance roundrobin
+    default-server inter 5s fall 3 rise 1
+    server master-local 127.0.0.1:{{ haproxy_backend_port }} check
 {% for ip in k8s_master_ips %}
-    server master-{{ loop.index }} {{ ip }}:{{ haproxy_backend_port }} check fall 3 rise 2
+{% if ip != ansible_host %}
+    server master-{{ ip | replace('.', '-') }} {{ ip }}:{{ haproxy_backend_port }} check
+{% endif %}
 {% endfor %}

@@ -46,7 +46,7 @@
 
 - name: Read mars SSH public key (for cross-host access)
   set_fact:
-    mars_pubkey: "{{ lookup('file', playbook_dir + '/../files/ssh/bootstrap/id_ed25519.pub') }}"
+    mars_pubkey: "{{ lookup('file', home_dir + '/.ssh/id_secunet.pub') }}"
   ignore_errors: true
 
 - name: Add mars SSH public key to authorized_keys

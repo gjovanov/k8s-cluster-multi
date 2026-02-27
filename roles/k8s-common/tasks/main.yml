@@ -75,6 +75,9 @@
       - curl
       - gnupg
       - software-properties-common
+      - conntrack
+      - socat
+      - ipset
     state: present
 
 # ============================================================
@@ -116,14 +119,27 @@
 
 - name: Generate default containerd config
   shell: containerd config default > /etc/containerd/config.toml
-  args:
-    creates: /etc/containerd/config.toml
+  notify: Restart containerd
+
+- name: Enable CRI plugin (remove from disabled_plugins)
+  replace:
+    path: /etc/containerd/config.toml
+    regexp: 'disabled_plugins = \["cri"\]'
+    replace: 'disabled_plugins = []'
+  notify: Restart containerd
 
 - name: Set SystemdCgroup = true in containerd config
   replace:
     path: /etc/containerd/config.toml
     regexp: 'SystemdCgroup\s*=\s*false'
     replace: 'SystemdCgroup = true'
+  notify: Restart containerd
+
+- name: Set sandbox image to pause:3.10 (match kubeadm expectation)
+  replace:
+    path: /etc/containerd/config.toml
+    regexp: 'sandbox_image = "registry.k8s.io/pause:3\.\d+"'
+    replace: 'sandbox_image = "registry.k8s.io/pause:3.10"'
   notify: Restart containerd
 
 - name: Flush handlers to restart containerd now

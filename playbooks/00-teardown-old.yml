@@ -2,7 +2,8 @@
 # Phase 0: Tear down old single-host K8s cluster on mars
 # Frees RAM for new VMs while preserving Docker containers
 - name: "Phase 0: Tear down old K8s cluster"
-  hosts: mars
+  hosts: localhost
+  connection: local
   become: true
   gather_facts: false
   tasks:

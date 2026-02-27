@@ -1,5 +1,5 @@
 ---
-apiVersion: kubeadm.k8s.io/v1beta3
+apiVersion: kubeadm.k8s.io/v1beta4
 kind: InitConfiguration
 skipPhases:
   - addon/kube-proxy
@@ -7,7 +7,7 @@ nodeRegistration:
   criSocket: unix:///var/run/containerd/containerd.sock
 certificateKey: {{ k8s_certificate_key }}
 ---
-apiVersion: kubeadm.k8s.io/v1beta3
+apiVersion: kubeadm.k8s.io/v1beta4
 kind: ClusterConfiguration
 controlPlaneEndpoint: "{{ k8s_control_plane_endpoint }}"
 networking:

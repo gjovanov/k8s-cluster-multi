@@ -2,8 +2,10 @@
 set -e
 
 # Enable forwarding between wg0 and the local VM bridge
-iptables -A FORWARD -i {{ wg_interface }} -o {{ bare_metal_hosts[host_name].vm_bridge }} -j ACCEPT
-iptables -A FORWARD -i {{ bare_metal_hosts[host_name].vm_bridge }} -o {{ wg_interface }} -j ACCEPT
+# INSERT at top of FORWARD chain so rules are evaluated BEFORE libvirt's
+# LIBVIRT_FWI/FWO/FWX chains which reject non-established traffic
+iptables -I FORWARD 1 -i {{ wg_interface }} -o {{ bare_metal_hosts[host_name].vm_bridge }} -j ACCEPT
+iptables -I FORWARD 1 -i {{ bare_metal_hosts[host_name].vm_bridge }} -o {{ wg_interface }} -j ACCEPT
 
 # Anti-masquerade rules: prevent libvirt's NAT masquerade from rewriting
 # source IPs on cross-host VM traffic routed through WireGuard.
