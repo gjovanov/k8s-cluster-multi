@@ -1,0 +1,18 @@
+<network>
+  <name>{{ libvirt_network_name }}</name>
+  <forward mode='nat'>
+    <nat>
+      <port start='1024' end='65535'/>
+    </nat>
+  </forward>
+  <bridge name='{{ bare_metal_hosts[host_name].vm_bridge }}' stp='on' delay='0'/>
+  <domain name='{{ libvirt_domain }}'/>
+  <ip address='{{ bare_metal_hosts[host_name].vm_gateway }}' netmask='255.255.255.0'>
+    <dhcp>
+      <range start='{{ bare_metal_hosts[host_name].vm_gateway | regex_replace("\\.\\d+$", ".") }}{{ libvirt_dhcp_start_offset }}' end='{{ bare_metal_hosts[host_name].vm_gateway | regex_replace("\\.\\d+$", ".") }}{{ libvirt_dhcp_end_offset }}'/>
+{% for vm in vms | selectattr('host', 'equalto', host_name) %}
+      <host mac='{{ vm.mac }}' name='{{ vm.name }}' ip='{{ vm.ip }}'/>
+{% endfor %}
+    </dhcp>
+  </ip>
+</network>

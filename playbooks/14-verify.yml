@@ -1,0 +1,118 @@
+---
+# Phase 14: Final verification of the entire cluster
+- name: "Phase 14a: Verify bare-metal hosts"
+  hosts: bare_metal
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Check VMs running
+      command: virsh list --state-running
+      register: virsh_list
+      changed_when: false
+
+    - name: Display VMs
+      debug:
+        msg: "{{ virsh_list.stdout_lines }}"
+
+    - name: Check WireGuard status
+      command: wg show
+      register: wg_status
+      changed_when: false
+
+    - name: Display WireGuard
+      debug:
+        msg: "{{ wg_status.stdout_lines }}"
+
+    - name: Check iptables NAT rules
+      command: iptables -t nat -L -n --line-numbers
+      register: iptables_nat
+      changed_when: false
+
+    - name: Display NAT rules count
+      debug:
+        msg: "NAT rules: {{ iptables_nat.stdout_lines | length }} lines"
+
+- name: "Phase 14b: Verify K8s cluster"
+  hosts: k8s-master-1
+  become: true
+  tasks:
+    - name: Get all nodes
+      command: kubectl get nodes -o wide
+      become_user: ubuntu
+      environment:
+        KUBECONFIG: /home/ubuntu/.kube/config
+      register: nodes
+      changed_when: false
+
+    - name: Display nodes
+      debug:
+        msg: "{{ nodes.stdout_lines }}"
+
+    - name: Get all pods across namespaces
+      command: kubectl get pods --all-namespaces -o wide
+      become_user: ubuntu
+      environment:
+        KUBECONFIG: /home/ubuntu/.kube/config
+      register: all_pods
+      changed_when: false
+
+    - name: Display pods
+      debug:
+        msg: "{{ all_pods.stdout_lines }}"
+
+    - name: Check Cilium status
+      command: kubectl -n kube-system get pods -l app.kubernetes.io/part-of=cilium
+      become_user: ubuntu
+      environment:
+        KUBECONFIG: /home/ubuntu/.kube/config
+      register: cilium_pods
+      changed_when: false
+
+    - name: Display Cilium
+      debug:
+        msg: "{{ cilium_pods.stdout_lines }}"
+
+    - name: Check COTURN pods
+      command: kubectl -n {{ coturn_namespace }} get pods -o wide
+      become_user: ubuntu
+      environment:
+        KUBECONFIG: /home/ubuntu/.kube/config
+      register: coturn_pods
+      changed_when: false
+
+    - name: Display COTURN
+      debug:
+        msg: "{{ coturn_pods.stdout_lines }}"
+
+    - name: Check monitoring pods
+      command: kubectl -n {{ monitoring_namespace }} get pods
+      become_user: ubuntu
+      environment:
+        KUBECONFIG: /home/ubuntu/.kube/config
+      register: monitoring_pods
+      changed_when: false
+      ignore_errors: true
+
+    - name: Display monitoring
+      debug:
+        msg: "{{ monitoring_pods.stdout_lines | default(['Monitoring not deployed yet']) }}"
+
+- name: "Phase 14c: Cross-host VM connectivity"
+  hosts: k8s-master-1
+  become: true
+  tasks:
+    - name: Ping all other VMs
+      command: "ping -c 2 -W 3 {{ item.ip }}"
+      loop: "{{ vms | rejectattr('name', 'equalto', 'k8s-master-1') | list }}"
+      loop_control:
+        label: "{{ item.name }} ({{ item.ip }})"
+      register: ping_results
+      changed_when: false
+      ignore_errors: true
+
+    - name: Display ping results
+      debug:
+        msg: "{{ item.item.name }}: {{ 'OK' if item.rc == 0 else 'FAIL' }}"
+      loop: "{{ ping_results.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"

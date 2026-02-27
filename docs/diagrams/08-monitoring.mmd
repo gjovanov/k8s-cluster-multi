@@ -1,0 +1,66 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1a1a2e', 'primaryTextColor': '#eee', 'lineColor': '#e94560', 'secondaryColor': '#0f3460'}}}%%
+graph TB
+    subgraph TARGETS["Scrape Targets"]
+        direction LR
+        NODES["Node Exporter<br/>DaemonSet<br/>6 nodes"]
+        KUBELETS["kubelets<br/>:10250/metrics"]
+        APISERVER["kube-apiserver<br/>:6443/metrics"]
+        ETCD_M["etcd<br/>:2381/metrics"]
+        CILIUM_M["cilium-agent<br/>:9962/metrics"]
+        PODS["Application Pods<br/>annotations-based"]
+    end
+
+    subgraph MONITORING_NS["Namespace: monitoring"]
+        direction TB
+
+        subgraph PROMETHEUS["Prometheus"]
+            PROM["Prometheus Server<br/>kube-prom-prometheus<br/>retention: 14d<br/>storage: 10Gi<br/>memory: 1Gi"]
+            PROM_CFG["ServiceMonitors<br/>PodMonitors<br/>PrometheusRules"]
+            PROM_CFG --> PROM
+        end
+
+        subgraph GRAFANA_STACK["Grafana"]
+            GRAFANA["Grafana<br/>kube-prom-grafana<br/>NodePort 30300"]
+            DASH["Built-in Dashboards<br/>+ COTURN custom dashboard"]
+            GRAFANA --- DASH
+        end
+
+        subgraph ALERTING["AlertManager"]
+            AM["AlertManager<br/>kube-prom-alertmanager"]
+            SMTP["SMTP Relay<br/>smtp.sendgrid.net:587"]
+            EMAIL["Email Notifications<br/>alerts@roomler.live"]
+
+            AM -->|"SMTP"| SMTP
+            SMTP --> EMAIL
+        end
+    end
+
+    NODES -->|"/metrics"| PROM
+    KUBELETS -->|"/metrics"| PROM
+    APISERVER -->|"/metrics"| PROM
+    ETCD_M -->|"/metrics"| PROM
+    CILIUM_M -->|"/metrics"| PROM
+    PODS -->|"/metrics"| PROM
+
+    PROM -->|"data source"| GRAFANA
+    PROM -->|"alerting rules"| AM
+
+    subgraph ACCESS["Access"]
+        TUNNEL["SSH Tunnel<br/>make grafana-tunnel<br/>localhost:3000"]
+        KUBECFG["kubectl port-forward"]
+    end
+
+    GRAFANA --> TUNNEL
+    GRAFANA --> KUBECFG
+
+    classDef targetStyle fill:#16213e,stroke:#e94560,stroke-width:1px,color:#eee
+    classDef promStyle fill:#e94560,stroke:#1a1a2e,stroke-width:2px,color:#fff
+    classDef grafanaStyle fill:#0f3460,stroke:#e94560,stroke-width:2px,color:#eee
+    classDef alertStyle fill:#533483,stroke:#e94560,stroke-width:2px,color:#eee
+    classDef accessStyle fill:#1a1a2e,stroke:#16213e,stroke-width:1px,color:#aaa
+
+    class NODES,KUBELETS,APISERVER,ETCD_M,CILIUM_M,PODS targetStyle
+    class PROM,PROM_CFG promStyle
+    class GRAFANA,DASH grafanaStyle
+    class AM,SMTP,EMAIL alertStyle
+    class TUNNEL,KUBECFG accessStyle

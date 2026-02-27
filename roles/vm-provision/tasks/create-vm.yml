@@ -1,0 +1,63 @@
+---
+# Create a single VM (called with loop_var: vm)
+
+- name: "{{ vm.name }} - Check if VM exists"
+  command: virsh dominfo {{ vm.name }}
+  register: vm_exists
+  failed_when: false
+  changed_when: false
+
+- name: "{{ vm.name }} - Create VM"
+  when: vm_exists.rc != 0
+  block:
+    - name: "{{ vm.name }} - Create qcow2 disk"
+      command: >
+        qemu-img create -f qcow2 -F qcow2
+        -b {{ cloud_image_dir }}/{{ cloud_image_name }}
+        {{ vm_image_dir }}/{{ vm.name }}.qcow2 {{ vm.disk_gb }}G
+
+    - name: "{{ vm.name }} - Create cloud-init directory"
+      file:
+        path: /var/lib/libvirt/cloud-init/{{ vm.name }}
+        state: directory
+        mode: "0755"
+
+    - name: "{{ vm.name }} - Template user-data"
+      template:
+        src: user-data.yml.j2
+        dest: /var/lib/libvirt/cloud-init/{{ vm.name }}/user-data
+        mode: "0644"
+
+    - name: "{{ vm.name }} - Template meta-data"
+      template:
+        src: meta-data.yml.j2
+        dest: /var/lib/libvirt/cloud-init/{{ vm.name }}/meta-data
+        mode: "0644"
+
+    - name: "{{ vm.name }} - Template network-config"
+      template:
+        src: network-config.yml.j2
+        dest: /var/lib/libvirt/cloud-init/{{ vm.name }}/network-config
+        mode: "0644"
+
+    - name: "{{ vm.name }} - Create cloud-init ISO"
+      command: >
+        genisoimage -output /var/lib/libvirt/cloud-init/{{ vm.name }}/cidata.iso
+        -V cidata -r -J user-data meta-data network-config
+      args:
+        chdir: /var/lib/libvirt/cloud-init/{{ vm.name }}
+
+    - name: "{{ vm.name }} - Create VM with virt-install"
+      command: >
+        virt-install --name {{ vm.name }}
+        --memory {{ vm.memory }} --vcpus {{ vm.vcpu }}
+        --disk {{ vm_image_dir }}/{{ vm.name }}.qcow2
+        --disk /var/lib/libvirt/cloud-init/{{ vm.name }}/cidata.iso,device=cdrom
+        --network network={{ libvirt_network_name }},mac={{ vm.mac }}
+        --cpu host-passthrough --os-variant ubuntu22.04
+        --graphics none --boot hd --import --noautoconsole
+
+- name: "{{ vm.name }} - Ensure VM is running"
+  command: virsh start {{ vm.name }}
+  failed_when: false
+  changed_when: false

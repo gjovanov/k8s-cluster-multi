@@ -1,0 +1,6 @@
+---
+- name: Generate WireGuard keys
+  ansible.builtin.include_tasks: generate-keys.yml
+
+- name: Deploy WireGuard configuration
+  ansible.builtin.include_tasks: deploy.yml

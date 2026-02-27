@@ -1,0 +1,70 @@
+---
+# Phase 12: Install kubectl + HAProxy on bare-metal hosts
+- name: "Phase 12: Host kubectl + HAProxy"
+  hosts: bare_metal
+  become: true
+  tasks:
+    - name: Check if kubectl is installed
+      command: kubectl version --client --short
+      register: kubectl_check
+      failed_when: false
+      changed_when: false
+
+    - name: Download kubectl binary
+      get_url:
+        url: "https://dl.k8s.io/release/v{{ k8s_version }}.0/bin/linux/amd64/kubectl"
+        dest: /usr/local/bin/kubectl
+        mode: '0755'
+      when: kubectl_check.rc != 0
+
+    - name: Create .kube directory
+      file:
+        path: "{{ home_dir }}/.kube"
+        state: directory
+        owner: "{{ host_user }}"
+        group: "{{ host_user }}"
+        mode: '0700'
+
+    - name: Copy kubeconfig to host
+      copy:
+        src: "{{ playbook_dir }}/../files/kubeconfig"
+        dest: "{{ home_dir }}/.kube/config"
+        owner: "{{ host_user }}"
+        group: "{{ host_user }}"
+        mode: '0600'
+
+    - name: Verify kubectl works
+      command: kubectl get nodes
+      become_user: "{{ host_user }}"
+      environment:
+        KUBECONFIG: "{{ home_dir }}/.kube/config"
+      register: kubectl_result
+      changed_when: false
+
+    - name: Display nodes
+      debug:
+        msg: "{{ kubectl_result.stdout_lines }}"
+
+    - name: Install HAProxy on host
+      apt:
+        name: haproxy
+        state: present
+        update_cache: true
+
+    - name: Deploy HAProxy config on host
+      template:
+        src: "{{ playbook_dir }}/../roles/haproxy/templates/haproxy.cfg.j2"
+        dest: /etc/haproxy/haproxy.cfg
+      notify: restart host haproxy
+
+    - name: Enable and start HAProxy on host
+      systemd:
+        name: haproxy
+        enabled: true
+        state: started
+
+  handlers:
+    - name: restart host haproxy
+      systemd:
+        name: haproxy
+        state: restarted

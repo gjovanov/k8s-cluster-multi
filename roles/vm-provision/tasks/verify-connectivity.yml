@@ -1,0 +1,24 @@
+---
+# Verify SSH connectivity to all VMs on this host
+
+- name: Test SSH connectivity to VMs on this host
+  command: >
+    ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no
+    -i {{ project_dir }}/files/ssh/{{ host_name }}/k8s_ed25519
+    ubuntu@{{ vm.ip }} echo "OK"
+  loop: "{{ host_vms }}"
+  loop_control:
+    loop_var: vm
+    label: "{{ vm.name }} ({{ vm.ip }})"
+  register: ssh_results
+  changed_when: false
+
+- name: Display connectivity results
+  debug:
+    msg: "{{ vm.name }} ({{ vm.ip }}): {{ 'CONNECTED' if item.rc == 0 else 'FAILED - ' + item.stderr }}"
+  loop: "{{ ssh_results.results }}"
+  loop_control:
+    loop_var: item
+    label: "{{ item.vm.name }}"
+  vars:
+    vm: "{{ item.vm }}"

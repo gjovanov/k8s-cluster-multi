@@ -1,0 +1,120 @@
+---
+- name: Add prometheus-community Helm repo
+  ansible.builtin.command:
+    cmd: helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  become: true
+  become_user: ubuntu
+  register: helm_repo_add
+  changed_when: "'has been added' in helm_repo_add.stdout"
+  failed_when: helm_repo_add.rc != 0 and 'already exists' not in helm_repo_add.stderr
+
+- name: Update Helm repos
+  ansible.builtin.command:
+    cmd: helm repo update
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  become: true
+  become_user: ubuntu
+  changed_when: true
+
+- name: Create monitoring namespace
+  ansible.builtin.command:
+    cmd: kubectl create namespace {{ monitoring_namespace }}
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  become: true
+  become_user: ubuntu
+  register: ns_result
+  changed_when: ns_result.rc == 0
+  failed_when: ns_result.rc != 0 and 'already exists' not in ns_result.stderr
+
+- name: Generate monitoring Helm values
+  ansible.builtin.template:
+    src: monitoring-values.yml.j2
+    dest: /tmp/monitoring-values.yml
+    mode: "0644"
+    owner: ubuntu
+    group: ubuntu
+
+- name: Install/upgrade kube-prometheus-stack via Helm
+  ansible.builtin.command:
+    cmd: >-
+      helm upgrade --install {{ monitoring_helm_release }} prometheus-community/kube-prometheus-stack
+      --namespace {{ monitoring_namespace }}
+      --version {{ monitoring_helm_chart_version }}
+      --values /tmp/monitoring-values.yml
+      --wait --timeout 10m
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  become: true
+  become_user: ubuntu
+  register: helm_install
+  changed_when: true
+
+- name: Display Helm output
+  ansible.builtin.debug:
+    var: helm_install.stdout_lines
+
+- name: Generate COTURN Grafana dashboard ConfigMap
+  ansible.builtin.template:
+    src: coturn-dashboard.json.j2
+    dest: /tmp/coturn-dashboard-cm.yml
+    mode: "0644"
+    owner: ubuntu
+    group: ubuntu
+
+- name: Apply COTURN Grafana dashboard ConfigMap
+  ansible.builtin.command:
+    cmd: kubectl apply -f /tmp/coturn-dashboard-cm.yml
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  become: true
+  become_user: ubuntu
+  changed_when: true
+
+- name: Wait for monitoring pods to be ready
+  ansible.builtin.command:
+    cmd: >-
+      kubectl -n {{ monitoring_namespace }} wait
+      --for=condition=ready pod
+      --all
+      --timeout=300s
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  become: true
+  become_user: ubuntu
+  register: monitoring_wait
+  retries: 3
+  delay: 10
+  until: monitoring_wait.rc == 0
+
+- name: Display monitoring pods
+  ansible.builtin.command:
+    cmd: kubectl -n {{ monitoring_namespace }} get pods -o wide
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  become: true
+  become_user: ubuntu
+  register: monitoring_pods
+  changed_when: false
+
+- name: Show monitoring pods status
+  ansible.builtin.debug:
+    var: monitoring_pods.stdout_lines
+
+- name: Clean up temp files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /tmp/monitoring-values.yml
+    - /tmp/coturn-dashboard-cm.yml
+
+- name: Display Grafana access info
+  ansible.builtin.debug:
+    msg:
+      - "Grafana is available on NodePort 30300"
+      - "SSH tunnel: ssh -L 3000:<master-ip>:30300 {{ host_user }}@<host-ip>"
+      - "Then open http://localhost:3000 (admin / {{ grafana_admin_password }})"

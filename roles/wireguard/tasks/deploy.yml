@@ -1,0 +1,27 @@
+---
+- name: Deploy wg0.conf
+  ansible.builtin.template:
+    src: wg0.conf.j2
+    dest: /etc/wireguard/wg0.conf
+    mode: "0600"
+  notify: Restart WireGuard
+
+- name: Deploy wg-postup.sh
+  ansible.builtin.template:
+    src: wg-postup.sh.j2
+    dest: /usr/local/bin/wg-postup.sh
+    mode: "0755"
+  notify: Restart WireGuard
+
+- name: Deploy wg-postdown.sh
+  ansible.builtin.template:
+    src: wg-postdown.sh.j2
+    dest: /usr/local/bin/wg-postdown.sh
+    mode: "0755"
+  notify: Restart WireGuard
+
+- name: Enable and start wg-quick@wg0
+  ansible.builtin.systemd:
+    name: wg-quick@wg0
+    enabled: true
+    state: started

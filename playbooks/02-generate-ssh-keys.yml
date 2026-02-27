@@ -1,0 +1,65 @@
+---
+# Phase 2: Generate SSH keys for VMs on each host
+# Creates ed25519 keypairs and optionally PuTTY .ppk files
+- name: "Phase 2: Generate SSH keys"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ssh_base_dir: "{{ playbook_dir }}/../files/ssh"
+    host_list:
+      - mars
+      - zeus
+      - jupiter
+  tasks:
+    - name: Ensure SSH key directories exist
+      file:
+        path: "{{ ssh_base_dir }}/{{ item }}"
+        state: directory
+        mode: '0700'
+      loop: "{{ host_list }}"
+
+    - name: Check if SSH key already exists
+      stat:
+        path: "{{ ssh_base_dir }}/{{ item }}/k8s_ed25519"
+      loop: "{{ host_list }}"
+      register: key_check
+
+    - name: Generate ed25519 SSH keypair
+      command: >
+        ssh-keygen -t ed25519 -f {{ ssh_base_dir }}/{{ item.item }}/k8s_ed25519
+        -N "" -C "k8s-{{ item.item }}"
+      loop: "{{ key_check.results }}"
+      when: not item.stat.exists
+
+    - name: Set correct permissions on private keys
+      file:
+        path: "{{ ssh_base_dir }}/{{ item }}/k8s_ed25519"
+        mode: '0600'
+      loop: "{{ host_list }}"
+
+    - name: Check if puttygen is available
+      command: which puttygen
+      register: puttygen_check
+      failed_when: false
+      changed_when: false
+
+    - name: Convert to PuTTY .ppk format
+      command: >
+        puttygen {{ ssh_base_dir }}/{{ item }}/k8s_ed25519
+        -o {{ home_dir }}/.ssh/putty-{{ item }}.ppk -O private
+      loop: "{{ host_list }}"
+      when: puttygen_check.rc == 0
+
+    - name: Display generated keys
+      command: ls -la {{ ssh_base_dir }}/{{ item }}/
+      loop: "{{ host_list }}"
+      register: ls_result
+      changed_when: false
+
+    - name: Show key files
+      debug:
+        msg: "{{ item.stdout_lines }}"
+      loop: "{{ ls_result.results }}"
+      loop_control:
+        label: "{{ item.item }}"

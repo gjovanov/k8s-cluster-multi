@@ -1,0 +1,127 @@
+---
+- name: Create coturn namespace
+  ansible.builtin.command:
+    cmd: kubectl create namespace {{ coturn_namespace }}
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  become: true
+  become_user: ubuntu
+  register: ns_result
+  changed_when: ns_result.rc == 0
+  failed_when: ns_result.rc != 0 and 'already exists' not in ns_result.stderr
+  run_once: true
+
+- name: Copy TLS certificate to master
+  ansible.builtin.copy:
+    src: "{{ coturn_tls_cert }}"
+    dest: /tmp/coturn-tls.crt
+    mode: "0600"
+    owner: ubuntu
+    group: ubuntu
+
+- name: Copy TLS key to master
+  ansible.builtin.copy:
+    src: "{{ coturn_tls_key }}"
+    dest: /tmp/coturn-tls.key
+    mode: "0600"
+    owner: ubuntu
+    group: ubuntu
+
+- name: Check if TLS secret exists
+  ansible.builtin.command:
+    cmd: kubectl -n {{ coturn_namespace }} get secret coturn-tls
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  become: true
+  become_user: ubuntu
+  register: tls_secret_check
+  changed_when: false
+  failed_when: false
+
+- name: Create TLS secret if not exists
+  ansible.builtin.command:
+    cmd: >-
+      kubectl -n {{ coturn_namespace }} create secret tls coturn-tls
+      --cert=/tmp/coturn-tls.crt
+      --key=/tmp/coturn-tls.key
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  become: true
+  become_user: ubuntu
+  when: tls_secret_check.rc != 0
+
+- name: Clean up TLS files from /tmp
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /tmp/coturn-tls.crt
+    - /tmp/coturn-tls.key
+
+- name: Deploy COTURN ConfigMaps
+  ansible.builtin.template:
+    src: coturn-configmap.yml.j2
+    dest: "/tmp/{{ item.name }}-configmap.yml"
+    mode: "0644"
+    owner: ubuntu
+    group: ubuntu
+  loop: "{{ coturn_workers }}"
+
+- name: Apply COTURN ConfigMaps
+  ansible.builtin.command:
+    cmd: kubectl apply -f /tmp/{{ item.name }}-configmap.yml
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  become: true
+  become_user: ubuntu
+  loop: "{{ coturn_workers }}"
+  changed_when: true
+
+- name: Deploy COTURN Deployments
+  ansible.builtin.template:
+    src: coturn-deployment.yml.j2
+    dest: "/tmp/{{ item.name }}-deployment.yml"
+    mode: "0644"
+    owner: ubuntu
+    group: ubuntu
+  loop: "{{ coturn_workers }}"
+
+- name: Apply COTURN Deployments
+  ansible.builtin.command:
+    cmd: kubectl apply -f /tmp/{{ item.name }}-deployment.yml
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  become: true
+  become_user: ubuntu
+  loop: "{{ coturn_workers }}"
+  changed_when: true
+
+- name: Wait for COTURN pods to be ready
+  ansible.builtin.command:
+    cmd: >-
+      kubectl -n {{ coturn_namespace }} wait
+      --for=condition=ready pod
+      -l app=coturn
+      --timeout=120s
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  become: true
+  become_user: ubuntu
+  register: coturn_wait
+  retries: 3
+  delay: 10
+  until: coturn_wait.rc == 0
+
+- name: Display COTURN pods
+  ansible.builtin.command:
+    cmd: kubectl -n {{ coturn_namespace }} get pods -l app=coturn -o wide
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  become: true
+  become_user: ubuntu
+  register: coturn_pods
+  changed_when: false
+
+- name: Show COTURN pods status
+  ansible.builtin.debug:
+    var: coturn_pods.stdout_lines

@@ -1,0 +1,30 @@
+---
+# HAProxy - local K8s API server load balancer
+# Runs on ALL k8s_cluster VMs (masters + workers)
+
+- name: Install haproxy
+  apt:
+    name: haproxy
+    state: present
+    update_cache: true
+
+- name: Deploy haproxy.cfg
+  template:
+    src: haproxy.cfg.j2
+    dest: /etc/haproxy/haproxy.cfg
+    mode: "0644"
+  notify: restart haproxy
+
+- name: Enable and start haproxy
+  systemd:
+    name: haproxy
+    enabled: true
+    state: started
+
+- name: Verify HAProxy is listening on 127.0.0.1:{{ haproxy_frontend_port }}
+  wait_for:
+    host: 127.0.0.1
+    port: "{{ haproxy_frontend_port }}"
+    timeout: 10
+    state: started
+  ignore_errors: true

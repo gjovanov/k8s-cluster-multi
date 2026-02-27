@@ -1,0 +1,35 @@
+#cloud-config
+hostname: {{ vm.name }}
+fqdn: {{ vm.name }}.{{ libvirt_domain }}
+manage_etc_hosts: true
+
+users:
+  - name: ubuntu
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: adm, sudo
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - {{ ssh_public_key }}
+
+package_update: true
+package_upgrade: true
+packages:
+  - qemu-guest-agent
+  - curl
+  - gnupg
+  - nfs-common
+  - open-iscsi
+  - net-tools
+
+growpart:
+  mode: auto
+  devices: ['/']
+
+runcmd:
+  - systemctl enable qemu-guest-agent
+  - systemctl start qemu-guest-agent
+  - ufw disable || true
+
+power_state:
+  mode: reboot
+  timeout: 30

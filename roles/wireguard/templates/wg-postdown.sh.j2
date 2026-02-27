@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -e
+
+# Remove forwarding rules between wg0 and the local VM bridge
+iptables -D FORWARD -i {{ wg_interface }} -o {{ bare_metal_hosts[host_name].vm_bridge }} -j ACCEPT
+iptables -D FORWARD -i {{ bare_metal_hosts[host_name].vm_bridge }} -o {{ wg_interface }} -j ACCEPT
+
+# Remove anti-masquerade RETURN rules from nat POSTROUTING
+{% for peer_name, peer in bare_metal_hosts.items() if peer_name != host_name %}
+# {{ host_name }} <-> {{ peer_name }}
+iptables -t nat -D POSTROUTING -s {{ bare_metal_hosts[host_name].vm_subnet }} -d {{ peer.vm_subnet }} -j RETURN
+iptables -t nat -D POSTROUTING -s {{ peer.vm_subnet }} -d {{ bare_metal_hosts[host_name].vm_subnet }} -j RETURN
+{% endfor %}

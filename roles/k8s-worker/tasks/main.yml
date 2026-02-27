@@ -1,0 +1,72 @@
+---
+# Join worker nodes to the K8s cluster and apply labels
+# Runs on k8s_workers group AFTER masters are initialized
+
+# ============================================================
+# Join cluster
+# ============================================================
+- name: Check if kubelet is already configured
+  stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: kubelet_conf
+
+- name: Join cluster using join command from first master
+  command: "{{ hostvars[k8s_first_master]['k8s_join_command'] }}"
+  register: join_result
+  when: not kubelet_conf.stat.exists
+  timeout: 120
+
+- name: Display join result
+  debug:
+    msg: "{{ join_result.stdout_lines | default(['Already joined']) }}"
+
+- name: Wait for kubelet to be active
+  command: systemctl is-active kubelet
+  register: kubelet_active
+  retries: 12
+  delay: 10
+  until: kubelet_active.rc == 0
+  changed_when: false
+
+# ============================================================
+# Node labels
+# ============================================================
+- name: Label node with coturn=true
+  command: >
+    kubectl label node {{ inventory_hostname }} coturn=true --overwrite
+  delegate_to: "{{ k8s_first_master }}"
+  become_user: ubuntu
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  changed_when: true
+
+- name: Label node with worker role
+  command: >
+    kubectl label node {{ inventory_hostname }}
+    node-role.kubernetes.io/worker=worker --overwrite
+  delegate_to: "{{ k8s_first_master }}"
+  become_user: ubuntu
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  changed_when: true
+
+- name: Label node with topology zone
+  command: >
+    kubectl label node {{ inventory_hostname }}
+    topology.kubernetes.io/zone={{ vm_host }} --overwrite
+  delegate_to: "{{ k8s_first_master }}"
+  become_user: ubuntu
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  changed_when: true
+
+- name: Label node with custom tags
+  command: >
+    kubectl label node {{ inventory_hostname }}
+    node-type={{ item }} --overwrite
+  loop: "{{ (vms | selectattr('name', 'equalto', inventory_hostname) | first).tags }}"
+  delegate_to: "{{ k8s_first_master }}"
+  become_user: ubuntu
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  changed_when: true

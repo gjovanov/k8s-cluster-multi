@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ item.name }}-config
+  namespace: {{ coturn_namespace }}
+data:
+  turnserver.conf: |
+    listening-port={{ coturn_turn_port }}
+    tls-listening-port={{ coturn_turns_port }}
+    alt-tls-listening-port={{ coturn_alt_tls_port }}
+    min-port={{ coturn_min_port }}
+    max-port={{ coturn_max_port }}
+    realm={{ coturn_realm }}
+    external-ip={{ item.public_ip }}/{{ item.node_ip }}
+    cert=/etc/coturn/tls/tls.crt
+    pkey=/etc/coturn/tls/tls.key
+    log-file=stdout
+    verbose
+    fingerprint
+    lt-cred-mech
+    use-auth-secret
+    static-auth-secret={{ coturn_auth_secret }}
+    no-cli
+    no-tlsv1
+    no-tlsv1_1

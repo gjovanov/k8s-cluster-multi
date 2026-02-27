@@ -1,0 +1,8 @@
+---
+# Phase 6: Install HAProxy on all 6 VMs
+# Local load balancer for K8s API (127.0.0.1:8443 -> 3 masters:6443)
+- name: "Phase 6: HAProxy on all VMs"
+  hosts: k8s_cluster
+  become: true
+  roles:
+    - haproxy

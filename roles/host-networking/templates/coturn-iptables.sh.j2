@@ -1,0 +1,46 @@
+#!/bin/bash
+set -e
+
+DNAT_CHAIN="COTURN_DNAT"
+OUTPUT_DNAT_CHAIN="COTURN_OUTPUT_DNAT"
+SNAT_CHAIN="COTURN_SNAT"
+
+# Get this host's rules
+PUBLIC_IP="{{ coturn_dnat_rules[host_name].public_ip }}"
+DEST_IP="{{ coturn_dnat_rules[host_name].dest_ip }}"
+
+# Create/flush DNAT chain
+iptables -t nat -N "$DNAT_CHAIN" 2>/dev/null || iptables -t nat -F "$DNAT_CHAIN"
+iptables -t nat -C PREROUTING -j "$DNAT_CHAIN" 2>/dev/null || \
+  iptables -t nat -I PREROUTING 1 -j "$DNAT_CHAIN"
+
+# Create/flush OUTPUT DNAT chain
+iptables -t nat -N "$OUTPUT_DNAT_CHAIN" 2>/dev/null || iptables -t nat -F "$OUTPUT_DNAT_CHAIN"
+iptables -t nat -C OUTPUT -j "$OUTPUT_DNAT_CHAIN" 2>/dev/null || \
+  iptables -t nat -I OUTPUT 1 -j "$OUTPUT_DNAT_CHAIN"
+
+# Create/flush SNAT chain
+iptables -t nat -N "$SNAT_CHAIN" 2>/dev/null || iptables -t nat -F "$SNAT_CHAIN"
+iptables -t nat -C POSTROUTING -j "$SNAT_CHAIN" 2>/dev/null || \
+  iptables -t nat -I POSTROUTING 1 -j "$SNAT_CHAIN"
+
+{% for proto in coturn_dnat_rules[host_name].protocols %}
+# DNAT for {{ proto }} ports
+{% for port in coturn_dnat_rules[host_name].ports %}
+iptables -t nat -A "$DNAT_CHAIN" -d "$PUBLIC_IP" -p {{ proto }} --dport {{ port }} -j DNAT --to-destination "$DEST_IP":{{ port }}
+iptables -t nat -A "$OUTPUT_DNAT_CHAIN" -d "$PUBLIC_IP" -p {{ proto }} --dport {{ port }} -j DNAT --to-destination "$DEST_IP":{{ port }}
+{% endfor %}
+{% for range in coturn_dnat_rules[host_name].port_ranges %}
+iptables -t nat -A "$DNAT_CHAIN" -d "$PUBLIC_IP" -p {{ proto }} --dport {{ range }} -j DNAT --to-destination "$DEST_IP":{{ range }}
+iptables -t nat -A "$OUTPUT_DNAT_CHAIN" -d "$PUBLIC_IP" -p {{ proto }} --dport {{ range }} -j DNAT --to-destination "$DEST_IP":{{ range }}
+{% endfor %}
+{% endfor %}
+
+# SNAT for relay traffic (preserve source ports)
+iptables -t nat -A "$SNAT_CHAIN" -s "$DEST_IP" -p udp --sport {{ coturn_dnat_rules[host_name].port_ranges[0] }} -j SNAT --to-source "$PUBLIC_IP"
+iptables -t nat -A "$SNAT_CHAIN" -s "$DEST_IP" -p tcp --sport {{ coturn_dnat_rules[host_name].port_ranges[0] }} -j SNAT --to-source "$PUBLIC_IP"
+
+# General SNAT for non-relay outbound
+iptables -t nat -A "$SNAT_CHAIN" -s "$DEST_IP" ! -d {{ coturn_dnat_rules[host_name].vm_subnet }} -j SNAT --to-source "$PUBLIC_IP"
+
+echo "COTURN iptables rules applied for {{ host_name }} ($PUBLIC_IP -> $DEST_IP)"

@@ -1,0 +1,71 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1a1a2e', 'primaryTextColor': '#eee', 'lineColor': '#e94560', 'secondaryColor': '#0f3460'}}}%%
+flowchart TD
+    START([Phase 5: VM Provisioning])
+
+    subgraph PREP["1. Prepare Base Image"]
+        DL["Download Ubuntu 22.04<br/>cloud image .img"]
+        CONVERT["Convert to qcow2<br/>qemu-img convert"]
+        RESIZE["Resize disk<br/>qemu-img resize<br/>40 GB master / 100-200 GB worker"]
+    end
+
+    subgraph CLOUDINIT["2. Cloud-Init Config"]
+        META["meta-data.yml.j2<br/>instance-id, hostname"]
+        NETCFG["network-config.yml.j2<br/>Static IP, gateway, DNS<br/>routes to remote subnets via host"]
+        USERDATA["user-data.yml.j2<br/>SSH authorized keys<br/>packages, timezone<br/>sysctl tuning"]
+        ISO["Generate cloud-init ISO<br/>genisoimage -V cidata"]
+    end
+
+    subgraph LIBVIRT["3. Libvirt Network"]
+        NET_DEF["Define k8s-net<br/>virbr1 bridge<br/>NAT + DHCP"]
+        NET_START["Start network<br/>virsh net-start k8s-net"]
+    end
+
+    subgraph INSTALL["4. virt-install"]
+        VIRT["virt-install<br/>--name k8s-{master,worker}-N<br/>--vcpus / --memory<br/>--disk qcow2<br/>--cdrom cloud-init.iso<br/>--network bridge=virbr1<br/>--os-variant ubuntu22.04"]
+        BOOT["VM boots with<br/>cloud-init first-boot"]
+    end
+
+    subgraph VERIFY["5. Verify"]
+        WAIT["Wait for SSH<br/>port 22 reachable"]
+        CHECK["Verify hostname<br/>Verify IP address<br/>Verify connectivity"]
+    end
+
+    START --> DL
+    DL --> CONVERT
+    CONVERT --> RESIZE
+
+    RESIZE --> META
+    META --> NETCFG
+    NETCFG --> USERDATA
+    USERDATA --> ISO
+
+    RESIZE --> NET_DEF
+    NET_DEF --> NET_START
+
+    ISO --> VIRT
+    NET_START --> VIRT
+    VIRT --> BOOT
+
+    BOOT --> WAIT
+    WAIT --> CHECK
+
+    subgraph REPEAT["Repeat for Each Host"]
+        PER_HOST["mars: master-1, worker-1<br/>zeus: master-2, worker-2<br/>jupiter: master-3, worker-3"]
+    end
+
+    CHECK --> PER_HOST
+
+    classDef startStyle fill:#e94560,stroke:#1a1a2e,stroke-width:2px,color:#fff
+    classDef prepStyle fill:#16213e,stroke:#e94560,stroke-width:1px,color:#eee
+    classDef ciStyle fill:#0f3460,stroke:#e94560,stroke-width:1px,color:#eee
+    classDef libvirtStyle fill:#533483,stroke:#e94560,stroke-width:1px,color:#eee
+    classDef installStyle fill:#1a1a2e,stroke:#e94560,stroke-width:2px,color:#eee
+    classDef verifyStyle fill:#16213e,stroke:#533483,stroke-width:1px,color:#eee
+
+    class START startStyle
+    class DL,CONVERT,RESIZE prepStyle
+    class META,NETCFG,USERDATA,ISO ciStyle
+    class NET_DEF,NET_START libvirtStyle
+    class VIRT,BOOT installStyle
+    class WAIT,CHECK verifyStyle
+    class PER_HOST prepStyle

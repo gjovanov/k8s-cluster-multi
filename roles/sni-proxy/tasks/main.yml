@@ -1,0 +1,129 @@
+---
+- name: Install nginx and libnginx-mod-stream
+  ansible.builtin.apt:
+    name:
+      - nginx
+      - libnginx-mod-stream
+    state: present
+    update_cache: true
+
+- name: Remove default nginx site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload host nginx
+
+- name: Get Docker nginx container IP
+  ansible.builtin.command:
+    cmd: "docker inspect -f '{{ '{{' }}range .NetworkSettings.Networks{{ '}}' }}{{ '{{' }}.IPAddress{{ '}}' }}{{ '{{' }}end{{ '}}' }}' {{ sni_proxy_docker_container }}"
+  register: docker_nginx_ip
+  changed_when: false
+
+- name: Display Docker nginx IP
+  ansible.builtin.debug:
+    msg: "Docker nginx container IP: {{ docker_nginx_ip.stdout }}"
+
+- name: Deploy SNI proxy stream config
+  ansible.builtin.template:
+    src: sni-proxy-stream.conf.j2
+    dest: /etc/nginx/conf.d/sni-proxy-stream.conf
+    mode: "0644"
+    owner: root
+    group: root
+  notify: Reload host nginx
+
+- name: Write Docker nginx upstream include file
+  ansible.builtin.copy:
+    content: |
+      upstream docker_nginx_ip1 {
+          server {{ docker_nginx_ip.stdout }}:443;
+      }
+    dest: /etc/nginx/conf.d/docker-nginx-upstream.conf
+    mode: "0644"
+    owner: root
+    group: root
+  notify: Reload host nginx
+
+- name: Deploy Docker IP updater script
+  ansible.builtin.template:
+    src: sni-proxy-update-docker-ips.sh.j2
+    dest: /usr/local/bin/sni-proxy-update-docker-ips.sh
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Deploy Docker IP updater systemd service
+  ansible.builtin.template:
+    src: sni-proxy-update-docker-ips.service.j2
+    dest: /etc/systemd/system/sni-proxy-update-docker-ips.service
+    mode: "0644"
+    owner: root
+    group: root
+  notify: Reload systemd
+
+- name: Enable Docker IP updater service
+  ansible.builtin.systemd:
+    name: sni-proxy-update-docker-ips
+    enabled: true
+    daemon_reload: true
+
+- name: Ensure Docker override directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Check if Docker override conf exists
+  ansible.builtin.stat:
+    path: /etc/systemd/system/docker.service.d/override.conf
+  register: docker_override_stat
+
+- name: Create Docker override conf if not present
+  ansible.builtin.copy:
+    content: |
+      [Service]
+      ExecStartPost=/usr/local/bin/sni-proxy-update-docker-ips.sh
+    dest: /etc/systemd/system/docker.service.d/override.conf
+    mode: "0644"
+    owner: root
+    group: root
+  when: not docker_override_stat.stat.exists
+  notify:
+    - Reload systemd
+    - Reload host nginx
+
+- name: Add SNI proxy hook to Docker override if not present
+  ansible.builtin.lineinfile:
+    path: /etc/systemd/system/docker.service.d/override.conf
+    line: "ExecStartPost=/usr/local/bin/sni-proxy-update-docker-ips.sh"
+    insertafter: "\\[Service\\]"
+    state: present
+  when: docker_override_stat.stat.exists
+  notify:
+    - Reload systemd
+    - Reload host nginx
+
+- name: Enable and start host nginx
+  ansible.builtin.systemd:
+    name: nginx
+    state: started
+    enabled: true
+
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Verify SNI proxy listening on 127.0.0.1:{{ sni_proxy_listen_port }}
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ sni_proxy_listen_port }}"
+    timeout: 10
+    state: started
+
+- name: Display SNI proxy status
+  ansible.builtin.debug:
+    msg:
+      - "SNI proxy is listening on 127.0.0.1:{{ sni_proxy_listen_port }}"
+      - "COTURN hostname: {{ sni_proxy_hostname }} -> {{ sni_proxy_backend_ip }}:443"
+      - "Default (other TLS): -> Docker nginx ({{ docker_nginx_ip.stdout }}:443)"

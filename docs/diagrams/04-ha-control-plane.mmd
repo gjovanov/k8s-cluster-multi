@@ -1,0 +1,76 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1a1a2e', 'primaryTextColor': '#eee', 'lineColor': '#e94560', 'secondaryColor': '#0f3460'}}}%%
+graph TB
+    subgraph LB["HAProxy on Every Node - 127.0.0.1:8443"]
+        direction LR
+        HAP1["HAProxy<br/>master-1"]
+        HAP2["HAProxy<br/>master-2"]
+        HAP3["HAProxy<br/>master-3"]
+        HAP4["HAProxy<br/>worker-1"]
+        HAP5["HAProxy<br/>worker-2"]
+        HAP6["HAProxy<br/>worker-3"]
+    end
+
+    subgraph CP["Control Plane - kube-apiserver :6443"]
+        direction LR
+        API1["kube-apiserver<br/>10.10.10.10:6443"]
+        API2["kube-apiserver<br/>10.10.20.10:6443"]
+        API3["kube-apiserver<br/>10.10.30.10:6443"]
+    end
+
+    subgraph ETCD["etcd Cluster"]
+        direction LR
+        ETCD1["etcd<br/>10.10.10.10:2379/2380"]
+        ETCD2["etcd<br/>10.10.20.10:2379/2380"]
+        ETCD3["etcd<br/>10.10.30.10:2379/2380"]
+
+        ETCD1 <-->|peer| ETCD2
+        ETCD2 <-->|peer| ETCD3
+        ETCD1 <-->|peer| ETCD3
+    end
+
+    subgraph CTRL["Control Plane Components"]
+        direction LR
+        SCHED1["kube-scheduler<br/>leader-elected"]
+        CCM1["kube-controller-mgr<br/>leader-elected"]
+    end
+
+    subgraph CILIUM["Cilium CNI"]
+        direction LR
+        AGENT["cilium-agent<br/>DaemonSet<br/>6 pods"]
+        OPERATOR["cilium-operator<br/>Deployment<br/>2 replicas"]
+        HUBBLE["Hubble<br/>Observability"]
+    end
+
+    subgraph WORKERS["Worker Nodes"]
+        direction LR
+        W1["k8s-worker-1<br/>10.10.10.11"]
+        W2["k8s-worker-2<br/>10.10.20.11"]
+        W3["k8s-worker-3<br/>10.10.30.11"]
+    end
+
+    HAP1 & HAP2 & HAP3 & HAP4 & HAP5 & HAP6 -->|"round-robin<br/>TCP mode"| API1
+    HAP1 & HAP2 & HAP3 & HAP4 & HAP5 & HAP6 -->|"round-robin<br/>TCP mode"| API2
+    HAP1 & HAP2 & HAP3 & HAP4 & HAP5 & HAP6 -->|"round-robin<br/>TCP mode"| API3
+
+    API1 --- ETCD1
+    API2 --- ETCD2
+    API3 --- ETCD3
+
+    API1 & API2 & API3 --- SCHED1
+    API1 & API2 & API3 --- CCM1
+
+    AGENT -->|"VXLAN<br/>MTU 1370"| W1 & W2 & W3
+
+    classDef hapStyle fill:#e94560,stroke:#1a1a2e,stroke-width:1px,color:#fff
+    classDef apiStyle fill:#0f3460,stroke:#e94560,stroke-width:2px,color:#eee
+    classDef etcdStyle fill:#533483,stroke:#e94560,stroke-width:2px,color:#eee
+    classDef ctrlStyle fill:#16213e,stroke:#e94560,stroke-width:1px,color:#eee
+    classDef ciliumStyle fill:#1a1a2e,stroke:#e94560,stroke-width:1px,color:#eee
+    classDef workerStyle fill:#0f3460,stroke:#533483,stroke-width:1px,color:#eee
+
+    class HAP1,HAP2,HAP3,HAP4,HAP5,HAP6 hapStyle
+    class API1,API2,API3 apiStyle
+    class ETCD1,ETCD2,ETCD3 etcdStyle
+    class SCHED1,CCM1 ctrlStyle
+    class AGENT,OPERATOR,HUBBLE ciliumStyle
+    class W1,W2,W3 workerStyle

@@ -1,0 +1,42 @@
+---
+# Phase 0: Tear down old single-host K8s cluster on mars
+# Frees RAM for new VMs while preserving Docker containers
+- name: "Phase 0: Tear down old K8s cluster"
+  hosts: mars
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Check if old teardown script exists
+      stat:
+        path: "{{ home_dir }}/k8s-cluster/scripts/teardown.sh"
+      register: old_teardown
+
+    - name: Run old teardown script
+      command: bash {{ home_dir }}/k8s-cluster/scripts/teardown.sh
+      args:
+        chdir: "{{ home_dir }}/k8s-cluster"
+      when: old_teardown.stat.exists
+      register: teardown_result
+      ignore_errors: true
+
+    - name: Display teardown result
+      debug:
+        msg: "{{ teardown_result.stdout_lines | default(['Teardown script not found or already done']) }}"
+
+    - name: Verify Docker containers still running
+      command: docker ps --format "table {% raw %}{{.Names}}\t{{.Status}}{% endraw %}"
+      register: docker_ps
+      changed_when: false
+
+    - name: Display Docker containers
+      debug:
+        msg: "{{ docker_ps.stdout_lines }}"
+
+    - name: Check free memory
+      command: free -h
+      register: free_mem
+      changed_when: false
+
+    - name: Display memory status
+      debug:
+        msg: "{{ free_mem.stdout_lines }}"

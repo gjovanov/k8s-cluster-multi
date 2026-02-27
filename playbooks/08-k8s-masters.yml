@@ -1,0 +1,33 @@
+---
+# Phase 8: HA K8s control plane (3 masters)
+# 8a: Initialize first master + install Cilium
+# 8b: Join additional masters (serial)
+# 8c: Verify HA cluster
+
+- name: "Phase 8a: Initialize first control-plane node"
+  hosts: k8s-master-1
+  become: true
+  tasks:
+    - name: Initialize first master
+      include_role:
+        name: k8s-master
+        tasks_from: init
+
+- name: "Phase 8b: Join additional control-plane nodes"
+  hosts: k8s_masters:!k8s-master-1
+  become: true
+  serial: 1
+  tasks:
+    - name: Join as control-plane node
+      include_role:
+        name: k8s-master
+        tasks_from: join
+
+- name: "Phase 8c: Verify HA control plane"
+  hosts: k8s-master-1
+  become: true
+  tasks:
+    - name: Verify cluster
+      include_role:
+        name: k8s-master
+        tasks_from: verify

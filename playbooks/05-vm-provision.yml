@@ -1,0 +1,7 @@
+---
+# Phase 5: Provision 2 VMs per host (6 total)
+- name: "Phase 5: VM provisioning"
+  hosts: bare_metal
+  become: true
+  roles:
+    - vm-provision

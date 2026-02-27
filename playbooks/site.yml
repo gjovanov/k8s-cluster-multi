@@ -1,0 +1,19 @@
+---
+# Master playbook - runs all phases in sequence
+# Usage: ansible-playbook playbooks/site.yml
+
+- import_playbook: 00-teardown-old.yml
+- import_playbook: 01-host-bootstrap.yml
+- import_playbook: 02-generate-ssh-keys.yml
+- import_playbook: 03-host-setup.yml
+- import_playbook: 04-wireguard.yml
+- import_playbook: 05-vm-provision.yml
+- import_playbook: 06-haproxy.yml
+- import_playbook: 07-k8s-common.yml
+- import_playbook: 08-k8s-masters.yml
+- import_playbook: 09-k8s-workers.yml
+- import_playbook: 10-coturn-deploy.yml
+- import_playbook: 11-host-networking.yml
+- import_playbook: 12-host-kubectl.yml
+- import_playbook: 13-monitoring.yml
+- import_playbook: 14-verify.yml

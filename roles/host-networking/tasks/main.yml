@@ -1,0 +1,133 @@
+---
+- name: Ensure iptables backup directory exists
+  ansible.builtin.file:
+    path: "{{ iptables_backup_path | dirname }}"
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Backup current iptables rules
+  ansible.builtin.shell:
+    cmd: "iptables-save > {{ iptables_backup_path }}"
+  changed_when: true
+
+- name: Preseed iptables-persistent for non-interactive install
+  ansible.builtin.debconf:
+    name: iptables-persistent
+    question: "{{ item }}"
+    value: "true"
+    vtype: boolean
+  loop:
+    - iptables-persistent/autosave_v4
+    - iptables-persistent/autosave_v6
+
+- name: Install iptables-persistent
+  ansible.builtin.apt:
+    name: iptables-persistent
+    state: present
+    update_cache: true
+
+- name: Generate COTURN iptables rules script
+  ansible.builtin.template:
+    src: coturn-iptables.sh.j2
+    dest: /usr/local/bin/coturn-iptables.sh
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Execute COTURN iptables rules script
+  ansible.builtin.command:
+    cmd: /usr/local/bin/coturn-iptables.sh
+  changed_when: true
+
+- name: Check FORWARD rule for VM subnet (destination)
+  ansible.builtin.command:
+    cmd: "iptables -C FORWARD -d {{ bare_metal_hosts[host_name].vm_subnet }} -j ACCEPT"
+  register: forward_dest_check
+  changed_when: false
+  failed_when: false
+
+- name: Add FORWARD rule for VM subnet (destination)
+  ansible.builtin.command:
+    cmd: "iptables -I FORWARD 1 -d {{ bare_metal_hosts[host_name].vm_subnet }} -j ACCEPT"
+  when: forward_dest_check.rc != 0
+  changed_when: true
+
+- name: Check FORWARD rule for VM subnet (source)
+  ansible.builtin.command:
+    cmd: "iptables -C FORWARD -s {{ bare_metal_hosts[host_name].vm_subnet }} -j ACCEPT"
+  register: forward_src_check
+  changed_when: false
+  failed_when: false
+
+- name: Add FORWARD rule for VM subnet (source)
+  ansible.builtin.command:
+    cmd: "iptables -I FORWARD 1 -s {{ bare_metal_hosts[host_name].vm_subnet }} -j ACCEPT"
+  when: forward_src_check.rc != 0
+  changed_when: true
+
+- name: Save iptables rules
+  ansible.builtin.shell:
+    cmd: "iptables-save > /etc/iptables/rules.v4"
+  changed_when: true
+
+- name: Deploy coturn-iptables systemd service
+  ansible.builtin.template:
+    src: coturn-iptables.service.j2
+    dest: /etc/systemd/system/coturn-iptables.service
+    mode: "0644"
+    owner: root
+    group: root
+  notify: Reload systemd
+
+- name: Enable coturn-iptables service
+  ansible.builtin.systemd:
+    name: coturn-iptables
+    enabled: true
+    daemon_reload: true
+
+- name: Deploy Docker restart hook script
+  ansible.builtin.template:
+    src: docker-restart-hook.sh.j2
+    dest: /usr/local/bin/docker-restart-hook.sh
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Create Docker override directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Deploy Docker service override
+  ansible.builtin.template:
+    src: docker-override.conf.j2
+    dest: /etc/systemd/system/docker.service.d/override.conf
+    mode: "0644"
+    owner: root
+    group: root
+  notify: Reload systemd
+
+- name: Verify iptables NAT rules
+  ansible.builtin.command:
+    cmd: iptables -t nat -L -n -v
+  register: nat_rules
+  changed_when: false
+
+- name: Show NAT rules
+  ansible.builtin.debug:
+    var: nat_rules.stdout_lines
+
+- name: Verify FORWARD rules
+  ansible.builtin.command:
+    cmd: iptables -L FORWARD -n -v
+  register: forward_rules
+  changed_when: false
+
+- name: Show FORWARD rules
+  ansible.builtin.debug:
+    var: forward_rules.stdout_lines

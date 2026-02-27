@@ -1,0 +1,83 @@
+---
+# Bootstrap new hosts (zeus, jupiter): create gjovanov user, SSH, hostname
+# Runs as root on bare_metal_bootstrap group
+
+- name: Set hostname
+  hostname:
+    name: "{{ host_name }}"
+
+- name: Update /etc/hostname
+  copy:
+    content: "{{ host_name }}\n"
+    dest: /etc/hostname
+
+- name: Ensure sudo group has NOPASSWD
+  lineinfile:
+    path: /etc/sudoers
+    regexp: '^%sudo'
+    line: '%sudo   ALL=(ALL:ALL) NOPASSWD:ALL'
+    validate: 'visudo -cf %s'
+
+- name: Create gjovanov user
+  user:
+    name: "{{ host_user }}"
+    groups: sudo
+    append: true
+    shell: /bin/bash
+    create_home: true
+    state: present
+
+- name: Create .ssh directory for gjovanov
+  file:
+    path: "/home/{{ host_user }}/.ssh"
+    state: directory
+    owner: "{{ host_user }}"
+    group: "{{ host_user }}"
+    mode: '0700'
+
+- name: Copy authorized_keys from root to user
+  copy:
+    src: /root/.ssh/authorized_keys
+    dest: "/home/{{ host_user }}/.ssh/authorized_keys"
+    owner: "{{ host_user }}"
+    group: "{{ host_user }}"
+    mode: '0600'
+    remote_src: true
+
+- name: Read mars SSH public key (for cross-host access)
+  set_fact:
+    mars_pubkey: "{{ lookup('file', playbook_dir + '/../files/ssh/bootstrap/id_ed25519.pub') }}"
+  ignore_errors: true
+
+- name: Add mars SSH public key to authorized_keys
+  lineinfile:
+    path: "/home/{{ host_user }}/.ssh/authorized_keys"
+    line: "{{ mars_pubkey }}"
+    state: present
+  when: mars_pubkey is defined and mars_pubkey | length > 0
+
+- name: Disable root password login
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PermitRootLogin'
+    line: 'PermitRootLogin prohibit-password'
+  notify: restart sshd
+
+- name: Disable password authentication
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^#?PasswordAuthentication'
+    line: 'PasswordAuthentication no'
+  notify: restart sshd
+
+- name: Verify gjovanov can sudo
+  become: true
+  become_user: "{{ host_user }}"
+  command: sudo -n whoami
+  register: sudo_test
+  changed_when: false
+
+- name: Display sudo test result
+  debug:
+    msg: "sudo test: {{ sudo_test.stdout }}"
+

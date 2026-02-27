@@ -1,0 +1,27 @@
+---
+# Phase 1: Bootstrap new hosts (zeus, jupiter)
+# Creates gjovanov user, sets up SSH, hostnames
+# Requires: SSH access as root (using converted PuTTY key)
+- name: "Phase 1: Bootstrap new hosts"
+  hosts: bare_metal_bootstrap
+  gather_facts: true
+  tasks:
+    - name: Include host-bootstrap role
+      include_role:
+        name: host-bootstrap
+
+- name: "Phase 1b: Verify new host access as {{ host_user }}"
+  hosts: zeus,jupiter
+  gather_facts: false
+  tasks:
+    - name: Test SSH connectivity
+      ping:
+
+    - name: Verify hostname
+      command: hostname
+      register: hostname_result
+      changed_when: false
+
+    - name: Display hostname
+      debug:
+        msg: "Host {{ inventory_hostname }} hostname: {{ hostname_result.stdout }}"

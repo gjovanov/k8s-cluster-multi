@@ -1,0 +1,51 @@
+---
+# =============================================================================
+# Verify HA control-plane cluster (runs on k8s-master-1)
+# =============================================================================
+
+- name: Get all nodes
+  command: kubectl get nodes -o wide
+  become: true
+  become_user: ubuntu
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  register: all_nodes
+  changed_when: false
+
+- name: Display all nodes
+  debug:
+    var: all_nodes.stdout_lines
+
+- name: Check etcd cluster health
+  shell: >
+    kubectl -n kube-system exec -it
+    $(kubectl -n kube-system get pod -l component=etcd --no-headers -o custom-columns=':metadata.name' | head -1)
+    -- etcdctl
+    --endpoints=https://127.0.0.1:2379
+    --cacert /etc/kubernetes/pki/etcd/ca.crt
+    --cert /etc/kubernetes/pki/etcd/peer.crt
+    --key /etc/kubernetes/pki/etcd/peer.key
+    member list -w table
+  become: true
+  become_user: ubuntu
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  register: etcd_status
+  changed_when: false
+
+- name: Display etcd cluster status
+  debug:
+    var: etcd_status.stdout_lines
+
+- name: Get Cilium pod status
+  command: kubectl -n kube-system get pods -l app.kubernetes.io/part-of=cilium
+  become: true
+  become_user: ubuntu
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  register: cilium_pods
+  changed_when: false
+
+- name: Display Cilium pods
+  debug:
+    var: cilium_pods.stdout_lines

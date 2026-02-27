@@ -1,0 +1,27 @@
+stream {
+    log_format sni_log '$remote_addr [$time_local] '
+                       '$protocol $status $bytes_sent $bytes_received '
+                       '$session_time "$upstream_addr" '
+                       '"$ssl_preread_server_name"';
+
+    access_log /var/log/nginx/sni-proxy-access.log sni_log;
+
+    upstream coturn_ip1 {
+        server {{ sni_proxy_backend_ip }}:443;
+    }
+
+    include /etc/nginx/conf.d/docker-nginx-upstream.conf;
+
+    map $ssl_preread_server_name $backend_ip1 {
+        {{ sni_proxy_hostname }}    coturn_ip1;
+        default                     docker_nginx_ip1;
+    }
+
+    server {
+        listen 127.0.0.1:{{ sni_proxy_listen_port }};
+        proxy_pass $backend_ip1;
+        ssl_preread on;
+        proxy_connect_timeout 5s;
+        proxy_timeout 3600s;
+    }
+}

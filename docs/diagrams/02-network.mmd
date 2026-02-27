@@ -1,0 +1,70 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1a1a2e', 'primaryTextColor': '#eee', 'lineColor': '#e94560', 'secondaryColor': '#0f3460'}}}%%
+graph TB
+    subgraph PUBLIC["Public Network"]
+        MARS_PUB["mars<br/>94.130.141.98"]
+        ZEUS_PUB["zeus<br/>5.9.157.226"]
+        JUPITER_PUB["jupiter<br/>5.9.157.221"]
+    end
+
+    subgraph WG_MESH["WireGuard Mesh - wg0"]
+        MARS_WG["mars wg0<br/>10.10.0.1/24"]
+        ZEUS_WG["zeus wg0<br/>10.10.0.2/24"]
+        JUPITER_WG["jupiter wg0<br/>10.10.0.3/24"]
+
+        MARS_WG <-->|UDP 51820| ZEUS_WG
+        MARS_WG <-->|UDP 51820| JUPITER_WG
+        ZEUS_WG <-->|UDP 51820| JUPITER_WG
+    end
+
+    subgraph MARS_NET["mars VM Subnet - virbr1"]
+        MARS_BR["Bridge: 10.10.10.1<br/>virbr1"]
+        MARS_M["k8s-master-1<br/>10.10.10.10"]
+        MARS_W["k8s-worker-1<br/>10.10.10.11"]
+        MARS_BR --- MARS_M
+        MARS_BR --- MARS_W
+    end
+
+    subgraph ZEUS_NET["zeus VM Subnet - virbr1"]
+        ZEUS_BR["Bridge: 10.10.20.1<br/>virbr1"]
+        ZEUS_M["k8s-master-2<br/>10.10.20.10"]
+        ZEUS_W["k8s-worker-2<br/>10.10.20.11"]
+        ZEUS_BR --- ZEUS_M
+        ZEUS_BR --- ZEUS_W
+    end
+
+    subgraph JUPITER_NET["jupiter VM Subnet - virbr1"]
+        JUPITER_BR["Bridge: 10.10.30.1<br/>virbr1"]
+        JUPITER_M["k8s-master-3<br/>10.10.30.10"]
+        JUPITER_W["k8s-worker-3<br/>10.10.30.11"]
+        JUPITER_BR --- JUPITER_M
+        JUPITER_BR --- JUPITER_W
+    end
+
+    subgraph K8S_NETS["Kubernetes Overlay Networks"]
+        POD_CIDR["Pod CIDR<br/>10.244.0.0/16<br/>Cilium VXLAN"]
+        SVC_CIDR["Service CIDR<br/>10.96.0.0/12"]
+    end
+
+    MARS_PUB --- MARS_WG
+    ZEUS_PUB --- ZEUS_WG
+    JUPITER_PUB --- JUPITER_WG
+
+    MARS_WG --- MARS_BR
+    ZEUS_WG --- ZEUS_BR
+    JUPITER_WG --- JUPITER_BR
+
+    MARS_M & MARS_W -.->|Cilium VXLAN<br/>MTU 1370| POD_CIDR
+    ZEUS_M & ZEUS_W -.->|Cilium VXLAN<br/>MTU 1370| POD_CIDR
+    JUPITER_M & JUPITER_W -.->|Cilium VXLAN<br/>MTU 1370| POD_CIDR
+
+    classDef publicStyle fill:#e94560,stroke:#1a1a2e,stroke-width:2px,color:#fff
+    classDef wgStyle fill:#0f3460,stroke:#e94560,stroke-width:2px,color:#eee
+    classDef bridgeStyle fill:#16213e,stroke:#e94560,stroke-width:1px,color:#eee
+    classDef vmStyle fill:#533483,stroke:#e94560,stroke-width:1px,color:#eee
+    classDef k8sStyle fill:#1a1a2e,stroke:#e94560,stroke-width:2px,color:#eee
+
+    class MARS_PUB,ZEUS_PUB,JUPITER_PUB publicStyle
+    class MARS_WG,ZEUS_WG,JUPITER_WG wgStyle
+    class MARS_BR,ZEUS_BR,JUPITER_BR bridgeStyle
+    class MARS_M,MARS_W,ZEUS_M,ZEUS_W,JUPITER_M,JUPITER_W vmStyle
+    class POD_CIDR,SVC_CIDR k8sStyle

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -e
+
+# Enable forwarding between wg0 and the local VM bridge
+iptables -A FORWARD -i {{ wg_interface }} -o {{ bare_metal_hosts[host_name].vm_bridge }} -j ACCEPT
+iptables -A FORWARD -i {{ bare_metal_hosts[host_name].vm_bridge }} -o {{ wg_interface }} -j ACCEPT
+
+# Anti-masquerade rules: prevent libvirt's NAT masquerade from rewriting
+# source IPs on cross-host VM traffic routed through WireGuard.
+# INSERT RETURN rules at the top of nat POSTROUTING so they are evaluated
+# before libvirt's MASQUERADE rules.
+{% for peer_name, peer in bare_metal_hosts.items() if peer_name != host_name %}
+# {{ host_name }} <-> {{ peer_name }}
+iptables -t nat -I POSTROUTING -s {{ bare_metal_hosts[host_name].vm_subnet }} -d {{ peer.vm_subnet }} -j RETURN
+iptables -t nat -I POSTROUTING -s {{ peer.vm_subnet }} -d {{ bare_metal_hosts[host_name].vm_subnet }} -j RETURN
+{% endfor %}

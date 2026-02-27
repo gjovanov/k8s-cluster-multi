@@ -1,0 +1,25 @@
+# Ansible cache
+.ansible_cache/
+*.retry
+
+# SSH private keys
+files/ssh/*/k8s_ed25519
+files/ssh/*/k8s_ed25519.ppk
+files/ssh/bootstrap/id_ed25519
+
+# WireGuard private keys
+files/wireguard/*/private.key
+
+# Kubeconfig
+files/kubeconfig
+
+# iptables backup
+backup/
+
+# Environment
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo

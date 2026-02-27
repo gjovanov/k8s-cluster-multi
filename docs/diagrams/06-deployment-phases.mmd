@@ -1,0 +1,51 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1a1a2e', 'primaryTextColor': '#eee', 'lineColor': '#e94560', 'secondaryColor': '#0f3460'}}}%%
+flowchart TD
+    P0["Phase 0: Teardown Old<br/>00-teardown-old.yml<br/>Remove previous cluster"]
+    P1["Phase 1: Host Bootstrap<br/>01-host-bootstrap.yml<br/>Create user, install packages"]
+    P2["Phase 2: Generate SSH Keys<br/>02-generate-ssh-keys.yml<br/>Per-host ed25519 keys"]
+    P3["Phase 3: Host Setup<br/>03-host-setup.yml<br/>KVM, libvirt, bridge network"]
+    P4["Phase 4: WireGuard Mesh<br/>04-wireguard.yml<br/>wg0 on 3 hosts, routing"]
+    P5["Phase 5: VM Provisioning<br/>05-vm-provision.yml<br/>Cloud-init, qcow2, virt-install"]
+    P6["Phase 6: HAProxy<br/>06-haproxy.yml<br/>127.0.0.1:8443 on every node"]
+    P7["Phase 7: K8s Prerequisites<br/>07-k8s-common.yml<br/>containerd, kubeadm, kubelet"]
+    P8["Phase 8: K8s Masters<br/>08-k8s-masters.yml<br/>kubeadm init + join, Cilium"]
+    P9["Phase 9: K8s Workers<br/>09-k8s-workers.yml<br/>kubeadm join workers"]
+    P10["Phase 10: COTURN Deploy<br/>10-coturn-deploy.yml<br/>3 COTURN pods, TLS certs"]
+    P11["Phase 11: Host Networking<br/>11-host-networking.yml<br/>iptables DNAT + SNAT + SNI"]
+    P12["Phase 12: Host kubectl<br/>12-host-kubectl.yml<br/>kubectl + HAProxy on hosts"]
+    P13["Phase 13: Monitoring<br/>13-monitoring.yml<br/>kube-prometheus-stack"]
+    P14["Phase 14: Verify<br/>14-verify.yml<br/>Health checks"]
+
+    P0 --> P1
+    P1 --> P2
+    P2 --> P3
+    P3 --> P4
+    P4 --> P5
+    P5 --> P6
+    P6 --> P7
+    P7 --> P8
+    P8 --> P9
+    P9 --> P10
+    P10 --> P11
+    P11 --> P12
+    P12 --> P13
+    P13 --> P14
+
+    classDef teardownStyle fill:#e94560,stroke:#1a1a2e,stroke-width:2px,color:#fff
+    classDef hostStyle fill:#16213e,stroke:#e94560,stroke-width:2px,color:#eee
+    classDef wgStyle fill:#0f3460,stroke:#e94560,stroke-width:2px,color:#eee
+    classDef vmStyle fill:#533483,stroke:#e94560,stroke-width:2px,color:#eee
+    classDef k8sStyle fill:#1a1a2e,stroke:#e94560,stroke-width:2px,color:#eee
+    classDef appStyle fill:#0f3460,stroke:#533483,stroke-width:2px,color:#eee
+    classDef verifyStyle fill:#16213e,stroke:#533483,stroke-width:2px,color:#eee
+
+    class P0 teardownStyle
+    class P1,P2,P3 hostStyle
+    class P4 wgStyle
+    class P5 vmStyle
+    class P6,P7 k8sStyle
+    class P8,P9 k8sStyle
+    class P10,P11 appStyle
+    class P12 hostStyle
+    class P13 appStyle
+    class P14 verifyStyle

@@ -1,0 +1,64 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1a1a2e', 'primaryTextColor': '#eee', 'lineColor': '#e94560', 'secondaryColor': '#0f3460'}}}%%
+graph TB
+    CLIENT([WebRTC Client])
+
+    subgraph MARS_FLOW["mars - 94.130.141.98"]
+        MARS_IFACE["eth0<br/>94.130.141.98"]
+        MARS_IPT["iptables DNAT<br/>COTURN_DNAT chain"]
+        MARS_W["k8s-worker-1<br/>10.10.10.11"]
+        MARS_COTURN["COTURN Pod<br/>hostNetwork: true<br/>:3478 / :5349 / :443<br/>:10000-13000 UDP"]
+
+        MARS_IFACE -->|":3478, :5349<br/>:10000-13000"| MARS_IPT
+        MARS_IPT -->|"DNAT to<br/>10.10.10.11"| MARS_W
+        MARS_W --- MARS_COTURN
+    end
+
+    subgraph ZEUS_FLOW["zeus - 5.9.157.226"]
+        ZEUS_IFACE["eth0<br/>5.9.157.226"]
+        ZEUS_IPT["iptables DNAT<br/>COTURN_DNAT chain"]
+        ZEUS_W["k8s-worker-2<br/>10.10.20.11"]
+        ZEUS_COTURN["COTURN Pod<br/>hostNetwork: true<br/>:3478 / :5349 / :443<br/>:10000-13000 UDP"]
+
+        ZEUS_IFACE -->|":3478, :5349<br/>:10000-13000"| ZEUS_IPT
+        ZEUS_IPT -->|"DNAT to<br/>10.10.20.11"| ZEUS_W
+        ZEUS_W --- ZEUS_COTURN
+    end
+
+    subgraph JUPITER_FLOW["jupiter - 5.9.157.221"]
+        JUPITER_IFACE["eth0<br/>5.9.157.221"]
+        JUPITER_IPT["iptables DNAT<br/>COTURN_DNAT chain"]
+        JUPITER_W["k8s-worker-3<br/>10.10.30.11"]
+        JUPITER_COTURN["COTURN Pod<br/>hostNetwork: true<br/>:3478 / :5349 / :443<br/>:10000-13000 UDP"]
+
+        JUPITER_IFACE -->|":3478, :5349<br/>:10000-13000"| JUPITER_IPT
+        JUPITER_IPT -->|"DNAT to<br/>10.10.30.11"| JUPITER_W
+        JUPITER_W --- JUPITER_COTURN
+    end
+
+    subgraph SNI["SNI Proxy - mars only"]
+        SNI_PROXY["nginx SNI proxy<br/>:4443 on mars"]
+        SNI_IPTABLES["iptables DNAT<br/>:443 -> :4443"]
+        SNI_BACKEND["10.10.10.11:5349<br/>TURNS backend"]
+
+        SNI_IPTABLES --> SNI_PROXY
+        SNI_PROXY -->|"TLS passthrough"| SNI_BACKEND
+    end
+
+    CLIENT -->|"TURN :3478<br/>TURNS :5349"| MARS_IFACE
+    CLIENT -->|"TURN :3478<br/>TURNS :5349"| ZEUS_IFACE
+    CLIENT -->|"TURN :3478<br/>TURNS :5349"| JUPITER_IFACE
+    CLIENT -->|"TURNS :443<br/>coturn.roomler.live"| SNI_IPTABLES
+
+    classDef clientStyle fill:#e94560,stroke:#1a1a2e,stroke-width:2px,color:#fff
+    classDef ifaceStyle fill:#16213e,stroke:#e94560,stroke-width:2px,color:#eee
+    classDef iptStyle fill:#0f3460,stroke:#e94560,stroke-width:1px,color:#eee
+    classDef workerStyle fill:#533483,stroke:#e94560,stroke-width:1px,color:#eee
+    classDef coturnStyle fill:#1a1a2e,stroke:#e94560,stroke-width:2px,color:#eee
+    classDef sniStyle fill:#0f3460,stroke:#533483,stroke-width:1px,color:#eee
+
+    class CLIENT clientStyle
+    class MARS_IFACE,ZEUS_IFACE,JUPITER_IFACE ifaceStyle
+    class MARS_IPT,ZEUS_IPT,JUPITER_IPT,SNI_IPTABLES iptStyle
+    class MARS_W,ZEUS_W,JUPITER_W workerStyle
+    class MARS_COTURN,ZEUS_COTURN,JUPITER_COTURN coturnStyle
+    class SNI_PROXY,SNI_BACKEND sniStyle

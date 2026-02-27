@@ -1,0 +1,32 @@
+---
+# Phase 4: WireGuard mesh between all 3 hosts
+# Play 1: Generate keys on all hosts
+# Play 2: Deploy configs (needs all public keys)
+# Play 3: Verify connectivity
+
+- name: "Phase 4a: Generate WireGuard keys"
+  hosts: bare_metal
+  become: true
+  tasks:
+    - name: Generate WireGuard keys
+      include_role:
+        name: wireguard
+        tasks_from: generate-keys
+
+- name: "Phase 4b: Deploy WireGuard mesh"
+  hosts: bare_metal
+  become: true
+  tasks:
+    - name: Deploy WireGuard config
+      include_role:
+        name: wireguard
+        tasks_from: deploy
+
+- name: "Phase 4c: Verify WireGuard mesh"
+  hosts: bare_metal
+  become: true
+  tasks:
+    - name: Verify WireGuard
+      include_role:
+        name: wireguard
+        tasks_from: verify

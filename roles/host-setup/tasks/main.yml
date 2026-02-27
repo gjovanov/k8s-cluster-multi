@@ -1,0 +1,107 @@
+---
+# Install KVM/libvirt and create per-host NAT network
+# Runs on bare_metal group
+
+- name: Remove stale apt sources (if any)
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/apt/sources.list.d/download_docker_com_linux_ubuntu.list
+  ignore_errors: true
+
+- name: Clean apt cache
+  command: apt-get clean
+  changed_when: false
+
+- name: Update apt cache
+  apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install KVM/libvirt packages
+  apt:
+    name:
+      - qemu-kvm
+      - libvirt-daemon-system
+      - libvirt-clients
+      - virtinst
+      - bridge-utils
+      - cloud-image-utils
+      - genisoimage
+      - python3-libvirt
+      - python3-lxml
+    state: present
+
+- name: Enable and start libvirtd
+  systemd:
+    name: libvirtd
+    enabled: true
+    state: started
+
+- name: Add user to libvirt and kvm groups
+  user:
+    name: "{{ host_user }}"
+    groups: libvirt,kvm
+    append: true
+
+- name: Check if default network exists
+  command: virsh net-info default
+  register: default_net
+  failed_when: false
+  changed_when: false
+
+- name: Disable default libvirt network
+  block:
+    - name: Destroy default network
+      command: virsh net-destroy default
+      ignore_errors: true
+    - name: Undefine default network
+      command: virsh net-undefine default
+      ignore_errors: true
+  when: default_net.rc == 0
+
+- name: Check if k8s-net exists
+  command: virsh net-info {{ libvirt_network_name }}
+  register: k8s_net
+  failed_when: false
+  changed_when: false
+
+- name: Create k8s-net NAT network
+  block:
+    - name: Generate network XML
+      template:
+        src: k8s-net.xml.j2
+        dest: /tmp/k8s-net.xml
+
+    - name: Define network
+      command: virsh net-define /tmp/k8s-net.xml
+
+    - name: Start network
+      command: virsh net-start {{ libvirt_network_name }}
+
+    - name: Autostart network
+      command: virsh net-autostart {{ libvirt_network_name }}
+
+    - name: Clean up XML
+      file:
+        path: /tmp/k8s-net.xml
+        state: absent
+  when: k8s_net.rc != 0
+
+- name: Display network info
+  command: virsh net-info {{ libvirt_network_name }}
+  register: net_info
+  changed_when: false
+
+- name: Show network info
+  debug:
+    msg: "{{ net_info.stdout_lines }}"
+
+- name: Enable IP forwarding (persistent)
+  sysctl:
+    name: net.ipv4.ip_forward
+    value: '1'
+    sysctl_set: true
+    state: present
+    reload: true

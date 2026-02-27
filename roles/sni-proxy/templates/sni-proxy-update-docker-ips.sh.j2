@@ -1,0 +1,45 @@
+#!/bin/bash
+set -e
+
+CONTAINER="{{ sni_proxy_docker_container }}"
+UPSTREAM_FILE="/etc/nginx/conf.d/docker-nginx-upstream.conf"
+MAX_WAIT=30
+WAIT=0
+
+# Wait for Docker container to be running
+while [ $WAIT -lt $MAX_WAIT ]; do
+  STATUS=$(docker inspect -f '{{ '{{' }}.State.Running{{ '}}' }}' "$CONTAINER" 2>/dev/null || echo "false")
+  if [ "$STATUS" = "true" ]; then
+    break
+  fi
+  sleep 1
+  WAIT=$((WAIT + 1))
+done
+
+if [ "$STATUS" != "true" ]; then
+  echo "ERROR: Container $CONTAINER not running after ${MAX_WAIT}s"
+  exit 1
+fi
+
+# Get container IP
+IP=$(docker inspect -f '{{ '{{' }}range .NetworkSettings.Networks{{ '}}' }}{{ '{{' }}.IPAddress{{ '}}' }}{{ '{{' }}end{{ '}}' }}' "$CONTAINER")
+
+if [ -z "$IP" ]; then
+  echo "ERROR: Could not get IP for container $CONTAINER"
+  exit 1
+fi
+
+# Write upstream config
+cat > "$UPSTREAM_FILE" << EOF
+upstream docker_nginx_ip1 {
+    server ${IP}:443;
+}
+EOF
+
+echo "Updated Docker nginx upstream IP to $IP"
+
+# Reload nginx if running
+if systemctl is-active --quiet nginx; then
+  nginx -t && systemctl reload nginx
+  echo "Nginx reloaded"
+fi

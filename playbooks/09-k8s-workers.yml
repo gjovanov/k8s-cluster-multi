@@ -1,0 +1,39 @@
+---
+# Phase 9: Join worker nodes to the cluster
+
+- name: "Phase 9a: Ensure join command is available"
+  hosts: k8s-master-1
+  become: true
+  tasks:
+    - name: Check for existing join command
+      command: kubeadm token create --print-join-command
+      become_user: root
+      register: join_cmd
+      changed_when: false
+
+    - name: Set join command fact
+      set_fact:
+        k8s_join_command: "{{ join_cmd.stdout }}"
+
+- name: "Phase 9b: Join worker nodes"
+  hosts: k8s_workers
+  become: true
+  serial: 1
+  roles:
+    - k8s-worker
+
+- name: "Phase 9c: Verify worker nodes"
+  hosts: k8s-master-1
+  become: true
+  tasks:
+    - name: Get all nodes
+      command: kubectl get nodes -o wide
+      become_user: ubuntu
+      environment:
+        KUBECONFIG: /home/ubuntu/.kube/config
+      register: nodes
+      changed_when: false
+
+    - name: Display cluster nodes
+      debug:
+        msg: "{{ nodes.stdout_lines }}"

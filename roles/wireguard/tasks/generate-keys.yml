@@ -1,0 +1,59 @@
+---
+- name: Install wireguard-tools
+  ansible.builtin.apt:
+    name: wireguard-tools
+    state: present
+    update_cache: true
+
+- name: Ensure /etc/wireguard directory exists
+  ansible.builtin.file:
+    path: /etc/wireguard
+    state: directory
+    mode: "0700"
+
+- name: Check if WireGuard private key already exists
+  ansible.builtin.stat:
+    path: /etc/wireguard/private.key
+  register: wg_private_key_stat
+
+- name: Generate WireGuard private key
+  ansible.builtin.command: wg genkey
+  register: wg_genkey
+  changed_when: true
+  when: not wg_private_key_stat.stat.exists
+
+- name: Save private key to /etc/wireguard/private.key
+  ansible.builtin.copy:
+    content: "{{ wg_genkey.stdout }}"
+    dest: /etc/wireguard/private.key
+    mode: "0600"
+  when: not wg_private_key_stat.stat.exists
+
+- name: Read private key
+  ansible.builtin.slurp:
+    src: /etc/wireguard/private.key
+  register: wg_private_key_slurp
+
+- name: Generate public key from private key
+  ansible.builtin.shell:
+    cmd: echo "{{ wg_private_key_slurp.content | b64decode | trim }}" | wg pubkey
+  register: wg_pubkey
+  changed_when: false
+
+- name: Save public key to /etc/wireguard/public.key
+  ansible.builtin.copy:
+    content: "{{ wg_pubkey.stdout }}"
+    dest: /etc/wireguard/public.key
+    mode: "0644"
+
+- name: Fetch private key to controller
+  ansible.builtin.fetch:
+    src: /etc/wireguard/private.key
+    dest: "{{ playbook_dir }}/../files/wireguard/{{ host_name }}/private.key"
+    flat: true
+
+- name: Fetch public key to controller
+  ansible.builtin.fetch:
+    src: /etc/wireguard/public.key
+    dest: "{{ playbook_dir }}/../files/wireguard/{{ host_name }}/public.key"
+    flat: true

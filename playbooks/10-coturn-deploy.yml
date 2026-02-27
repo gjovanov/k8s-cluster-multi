@@ -1,0 +1,7 @@
+---
+# Phase 10: Deploy COTURN (3 instances, one per worker)
+- name: "Phase 10: COTURN deployment"
+  hosts: k8s-master-1
+  become: true
+  roles:
+    - coturn

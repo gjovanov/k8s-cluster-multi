@@ -1,0 +1,247 @@
+---
+# ============================================================
+# Environment-driven configuration (from .env)
+# ============================================================
+host_user: "{{ lookup('env', 'HOST_USER') | default('gjovanov', true) }}"
+home_dir: "{{ lookup('env', 'HOME_DIR') | default('/home/' + host_user, true) }}"
+
+# ============================================================
+# Host definitions (bare-metal servers)
+# ============================================================
+bare_metal_hosts:
+  mars:
+    public_ip: "{{ lookup('env', 'MARS_PUBLIC_IP') | default('94.130.141.98', true) }}"
+    wg_ip: "10.10.0.1"
+    vm_subnet: "10.10.10.0/24"
+    vm_gateway: "10.10.10.1"
+    vm_bridge: "virbr1"
+    interface: "eth0"
+  zeus:
+    public_ip: "{{ lookup('env', 'ZEUS_PUBLIC_IP') | default('5.9.157.226', true) }}"
+    wg_ip: "10.10.0.2"
+    vm_subnet: "10.10.20.0/24"
+    vm_gateway: "10.10.20.1"
+    vm_bridge: "virbr1"
+    interface: "eth0"
+  jupiter:
+    public_ip: "{{ lookup('env', 'JUPITER_PUBLIC_IP') | default('5.9.157.221', true) }}"
+    wg_ip: "10.10.0.3"
+    vm_subnet: "10.10.30.0/24"
+    vm_gateway: "10.10.30.1"
+    vm_bridge: "virbr1"
+    interface: "eth0"
+
+# ============================================================
+# WireGuard
+# ============================================================
+wg_port: 51820
+wg_interface: "wg0"
+
+# ============================================================
+# Libvirt NAT network (per host, same name, unique subnet)
+# ============================================================
+libvirt_network_name: "k8s-net"
+libvirt_domain: "k8s.local"
+libvirt_dhcp_start_offset: 10
+libvirt_dhcp_end_offset: 50
+
+# ============================================================
+# VM definitions
+# ============================================================
+vms:
+  - name: k8s-master-1
+    ip: "10.10.10.10"
+    mac: "52:54:00:0a:01:10"
+    host: mars
+    vcpu: 2
+    memory: 8192
+    disk_gb: 40
+    role: master
+    tags:
+      - master
+      - master-main
+  - name: k8s-worker-1
+    ip: "10.10.10.11"
+    mac: "52:54:00:0a:01:11"
+    host: mars
+    vcpu: 4
+    memory: 32768
+    disk_gb: 100
+    role: worker
+    tags:
+      - worker
+      - worker-mini
+  - name: k8s-master-2
+    ip: "10.10.20.10"
+    mac: "52:54:00:0a:02:10"
+    host: zeus
+    vcpu: 2
+    memory: 8192
+    disk_gb: 40
+    role: master
+    tags:
+      - master
+  - name: k8s-worker-2
+    ip: "10.10.20.11"
+    mac: "52:54:00:0a:02:11"
+    host: zeus
+    vcpu: 12
+    memory: 98304
+    disk_gb: 200
+    role: worker
+    tags:
+      - worker
+      - worker-large
+  - name: k8s-master-3
+    ip: "10.10.30.10"
+    mac: "52:54:00:0a:03:10"
+    host: jupiter
+    vcpu: 2
+    memory: 8192
+    disk_gb: 40
+    role: master
+    tags:
+      - master
+  - name: k8s-worker-3
+    ip: "10.10.30.11"
+    mac: "52:54:00:0a:03:11"
+    host: jupiter
+    vcpu: 12
+    memory: 98304
+    disk_gb: 200
+    role: worker
+    tags:
+      - worker
+      - worker-large
+
+# ============================================================
+# Cloud image
+# ============================================================
+cloud_image_url: "https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.img"
+cloud_image_name: "jammy-server-cloudimg-amd64.img"
+cloud_image_dir: "/var/lib/libvirt/images"
+vm_image_dir: "/var/lib/libvirt/images"
+
+# ============================================================
+# Kubernetes
+# ============================================================
+k8s_version: "1.31"
+k8s_apt_key_url: "https://pkgs.k8s.io/core:/stable:/v1.31/deb/Release.key"
+k8s_apt_repo: "https://pkgs.k8s.io/core:/stable:/v1.31/deb/"
+k8s_pod_cidr: "10.244.0.0/16"
+k8s_service_cidr: "10.96.0.0/12"
+k8s_control_plane_endpoint: "127.0.0.1:8443"
+k8s_first_master: "k8s-master-1"
+k8s_first_master_ip: "10.10.10.10"
+
+k8s_master_ips:
+  - "10.10.10.10"
+  - "10.10.20.10"
+  - "10.10.30.10"
+
+# ============================================================
+# Containerd
+# ============================================================
+containerd_version: "1.7.*"
+
+# ============================================================
+# Cilium CNI
+# ============================================================
+cilium_version: "1.16.5"
+cilium_helm_repo: "https://helm.cilium.io"
+cilium_mtu: 1370
+cilium_operator_replicas: 2
+
+# ============================================================
+# HAProxy (local API server load balancer on every node)
+# ============================================================
+haproxy_frontend_port: 8443
+haproxy_backend_port: 6443
+
+# ============================================================
+# COTURN
+# ============================================================
+coturn_realm: "{{ lookup('env', 'COTURN_REALM') | default('roomler.live', true) }}"
+coturn_auth_secret: "{{ lookup('env', 'COTURN_AUTH_SECRET') }}"
+coturn_image: "coturn/coturn:latest"
+coturn_turn_port: 3478
+coturn_turns_port: 5349
+coturn_alt_tls_port: 443
+coturn_min_port: 10000
+coturn_max_port: 13000
+coturn_namespace: "coturn"
+coturn_tls_cert: "{{ lookup('env', 'COTURN_TLS_CERT') | default(home_dir + '/cert/roomler.live.fullchain.pem', true) }}"
+coturn_tls_key: "{{ lookup('env', 'COTURN_TLS_KEY') | default(home_dir + '/cert/roomler.live.key.pem', true) }}"
+
+coturn_workers:
+  - name: coturn-worker-1
+    node: k8s-worker-1
+    node_ip: "10.10.10.11"
+    public_ip: "{{ bare_metal_hosts.mars.public_ip }}"
+    host: mars
+  - name: coturn-worker-2
+    node: k8s-worker-2
+    node_ip: "10.10.20.11"
+    public_ip: "{{ bare_metal_hosts.zeus.public_ip }}"
+    host: zeus
+  - name: coturn-worker-3
+    node: k8s-worker-3
+    node_ip: "10.10.30.11"
+    public_ip: "{{ bare_metal_hosts.jupiter.public_ip }}"
+    host: jupiter
+
+# Per-host COTURN iptables DNAT rules
+coturn_dnat_rules:
+  mars:
+    public_ip: "{{ bare_metal_hosts.mars.public_ip }}"
+    dest_ip: "10.10.10.11"
+    vm_subnet: "10.10.10.0/24"
+    protocols: [tcp, udp]
+    ports: [3478, 5349]
+    port_ranges: ["10000:13000"]
+  zeus:
+    public_ip: "{{ bare_metal_hosts.zeus.public_ip }}"
+    dest_ip: "10.10.20.11"
+    vm_subnet: "10.10.20.0/24"
+    protocols: [tcp, udp]
+    ports: [3478, 5349]
+    port_ranges: ["10000:13000"]
+  jupiter:
+    public_ip: "{{ bare_metal_hosts.jupiter.public_ip }}"
+    dest_ip: "10.10.30.11"
+    vm_subnet: "10.10.30.0/24"
+    protocols: [tcp, udp]
+    ports: [3478, 5349]
+    port_ranges: ["10000:13000"]
+
+# ============================================================
+# SNI Proxy (mars only)
+# ============================================================
+sni_proxy_hostname: "{{ lookup('env', 'SNI_PROXY_HOSTNAME') | default('coturn.roomler.live', true) }}"
+sni_proxy_listen_port: 4443
+sni_proxy_public_ip: "{{ bare_metal_hosts.mars.public_ip }}"
+sni_proxy_backend_ip: "10.10.10.11"
+sni_proxy_docker_container: "{{ lookup('env', 'SNI_PROXY_DOCKER_CONTAINER') | default('nginx', true) }}"
+
+# ============================================================
+# Monitoring
+# ============================================================
+monitoring_namespace: "monitoring"
+monitoring_helm_release: "kube-prom"
+monitoring_helm_chart_version: "65.1.0"
+grafana_admin_password: "{{ lookup('env', 'GRAFANA_ADMIN_PASSWORD') }}"
+alertmanager_smtp_host: "smtp.sendgrid.net:587"
+alertmanager_smtp_from: "{{ lookup('env', 'ALERTMANAGER_EMAIL_FROM') | default('alerts@roomler.live', true) }}"
+alertmanager_smtp_to: "{{ lookup('env', 'ALERTMANAGER_EMAIL_TO') | default('goran.jovanov@gmail.com', true) }}"
+alertmanager_smtp_user: "{{ lookup('env', 'SMTP_USER') }}"
+alertmanager_smtp_password: "{{ lookup('env', 'SMTP_PASSWORD') }}"
+prometheus_retention: "14d"
+prometheus_storage_size: "10Gi"
+prometheus_memory_limit: "1Gi"
+
+# ============================================================
+# Paths (derived from home_dir)
+# ============================================================
+project_dir: "{{ home_dir }}/k8s-cluster-multi"
+kubeconfig_local_path: "{{ home_dir }}/k8s-cluster-multi/files/kubeconfig"
+iptables_backup_path: "{{ home_dir }}/k8s-cluster-multi/backup/iptables-backup.rules"

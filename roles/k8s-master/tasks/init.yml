@@ -1,0 +1,185 @@
+---
+# =============================================================================
+# Initialize the FIRST control-plane node (k8s-master-1 only)
+# =============================================================================
+
+- name: Check if Kubernetes is already initialized
+  stat:
+    path: /etc/kubernetes/admin.conf
+  register: kubeadm_already_init
+
+- name: Generate certificate key
+  command: kubeadm certs certificate-key
+  register: cert_key_result
+  when: not kubeadm_already_init.stat.exists
+
+- name: Set certificate key fact
+  set_fact:
+    k8s_certificate_key: "{{ cert_key_result.stdout }}"
+  when: not kubeadm_already_init.stat.exists
+
+- name: Create kubeadm config from template
+  template:
+    src: kubeadm-config.yml.j2
+    dest: /tmp/kubeadm-config.yml
+    mode: "0644"
+  when: not kubeadm_already_init.stat.exists
+
+- name: Initialize Kubernetes control plane
+  command: >
+    kubeadm init
+    --config /tmp/kubeadm-config.yml
+    --upload-certs
+    --certificate-key={{ k8s_certificate_key }}
+  register: kubeadm_init_output
+  timeout: 300
+  when: not kubeadm_already_init.stat.exists
+
+- name: Display kubeadm init output
+  debug:
+    var: kubeadm_init_output.stdout_lines
+  when: kubeadm_init_output is defined and kubeadm_init_output is not skipped
+
+- name: Create .kube directory for ubuntu user
+  file:
+    path: /home/ubuntu/.kube
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+
+- name: Copy admin.conf to ubuntu user kubeconfig
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /home/ubuntu/.kube/config
+    remote_src: true
+    owner: ubuntu
+    group: ubuntu
+    mode: "0600"
+
+- name: Set ownership on kubeconfig
+  file:
+    path: /home/ubuntu/.kube/config
+    owner: ubuntu
+    group: ubuntu
+    mode: "0600"
+
+# ---- Cilium CNI installation ----
+
+- name: Add Cilium Helm repo
+  command: helm repo add cilium {{ cilium_helm_repo }}
+  become: true
+  become_user: ubuntu
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  changed_when: true
+
+- name: Update Helm repos
+  command: helm repo update
+  become: true
+  become_user: ubuntu
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  changed_when: true
+
+- name: Check if Cilium is already installed
+  shell: helm list -n kube-system -q | grep cilium
+  become: true
+  become_user: ubuntu
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  register: cilium_installed
+  failed_when: false
+  changed_when: false
+
+- name: Install Cilium via Helm
+  command: >
+    helm install cilium cilium/cilium --version {{ cilium_version }}
+    --namespace kube-system
+    --set kubeProxyReplacement=true
+    --set k8sServiceHost=127.0.0.1
+    --set k8sServicePort={{ haproxy_frontend_port }}
+    --set tunnel=vxlan
+    --set bpf.masquerade=true
+    --set MTU={{ cilium_mtu }}
+    --set ipam.operator.clusterPoolIPv4PodCIDRList={{ k8s_pod_cidr }}
+    --set operator.replicas={{ cilium_operator_replicas }}
+  become: true
+  become_user: ubuntu
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  when: cilium_installed.rc != 0
+
+- name: Wait for Cilium pods to be ready
+  command: kubectl -n kube-system wait --for=condition=ready pod -l app.kubernetes.io/part-of=cilium --timeout=60s
+  become: true
+  become_user: ubuntu
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  register: cilium_ready
+  retries: 5
+  delay: 30
+  until: cilium_ready.rc == 0
+
+- name: Wait for CoreDNS pods to be ready
+  command: kubectl -n kube-system wait --for=condition=ready pod -l k8s-app=kube-dns --timeout=60s
+  become: true
+  become_user: ubuntu
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  register: coredns_ready
+  retries: 5
+  delay: 30
+  until: coredns_ready.rc == 0
+
+# ---- Generate join commands ----
+
+- name: Generate worker join command
+  command: kubeadm token create --print-join-command
+  register: join_command_result
+  changed_when: false
+
+- name: Set worker join command fact
+  set_fact:
+    k8s_join_command: "{{ join_command_result.stdout }}"
+
+- name: Generate certificate key for control-plane join
+  command: kubeadm certs certificate-key
+  register: cert_key_new_result
+  when: kubeadm_already_init.stat.exists
+
+- name: Set certificate key fact (already initialized)
+  set_fact:
+    k8s_certificate_key: "{{ cert_key_new_result.stdout }}"
+  when: kubeadm_already_init.stat.exists
+
+- name: Upload certs with certificate key
+  command: "kubeadm init phase upload-certs --upload-certs --certificate-key={{ k8s_certificate_key }}"
+  changed_when: true
+
+- name: Set control-plane join command fact
+  set_fact:
+    k8s_cp_join_command: "{{ k8s_join_command }} --control-plane --certificate-key={{ k8s_certificate_key }}"
+
+# ---- Fetch kubeconfig to controller ----
+
+- name: Fetch kubeconfig to controller
+  fetch:
+    src: /etc/kubernetes/admin.conf
+    dest: "{{ kubeconfig_local_path }}"
+    flat: true
+
+# ---- Display cluster status ----
+
+- name: Get cluster node status
+  command: kubectl get nodes
+  become: true
+  become_user: ubuntu
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  register: node_status
+  changed_when: false
+
+- name: Display cluster status
+  debug:
+    var: node_status.stdout_lines

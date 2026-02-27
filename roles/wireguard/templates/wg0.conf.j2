@@ -1,0 +1,16 @@
+[Interface]
+Address = {{ bare_metal_hosts[host_name].wg_ip }}/24
+PrivateKey = {{ lookup('file', playbook_dir + '/../files/wireguard/' + host_name + '/private.key') | trim }}
+ListenPort = {{ wg_port }}
+PostUp = /usr/local/bin/wg-postup.sh
+PostDown = /usr/local/bin/wg-postdown.sh
+
+{% for peer_name, peer in bare_metal_hosts.items() if peer_name != host_name %}
+[Peer]
+# {{ peer_name }}
+PublicKey = {{ lookup('file', playbook_dir + '/../files/wireguard/' + peer_name + '/public.key') | trim }}
+Endpoint = {{ peer.public_ip }}:{{ wg_port }}
+AllowedIPs = {{ peer.wg_ip }}/32, {{ peer.vm_subnet }}
+PersistentKeepalive = 25
+
+{% endfor %}

@@ -1,0 +1,47 @@
+---
+- name: Show WireGuard status
+  ansible.builtin.command: wg show
+  register: wg_show
+  changed_when: false
+
+- name: Display WireGuard status
+  ansible.builtin.debug:
+    var: wg_show.stdout_lines
+
+- name: Ping each peer's WireGuard IP
+  ansible.builtin.command: "ping -c 3 -W 2 {{ peer.value.wg_ip }}"
+  loop: "{{ bare_metal_hosts | dict2items }}"
+  loop_control:
+    loop_var: peer
+    label: "{{ peer.key }} ({{ peer.value.wg_ip }})"
+  when: peer.key != host_name
+  register: wg_ping_results
+  changed_when: false
+  failed_when: false
+
+- name: Display WireGuard ping results
+  ansible.builtin.debug:
+    msg: "{{ item.peer.key }}: {{ 'OK' if item.rc == 0 else 'FAILED' }}"
+  loop: "{{ wg_ping_results.results }}"
+  loop_control:
+    label: "{{ item.peer.key | default('skipped') }}"
+  when: item.skipped is not defined
+
+- name: Ping VM gateway on each remote subnet (will only work after VMs are created)
+  ansible.builtin.command: "ping -c 3 -W 2 {{ peer.value.vm_subnet | ansible.utils.ipaddr('10') | ansible.utils.ipaddr('address') }}"
+  loop: "{{ bare_metal_hosts | dict2items }}"
+  loop_control:
+    loop_var: peer
+    label: "{{ peer.key }} ({{ peer.value.vm_subnet | ansible.utils.ipaddr('10') | ansible.utils.ipaddr('address') }})"
+  when: peer.key != host_name
+  register: vm_ping_results
+  changed_when: false
+  failed_when: false
+
+- name: Display VM subnet ping results
+  ansible.builtin.debug:
+    msg: "{{ item.peer.key }}: {{ 'OK' if item.rc == 0 else 'FAILED (expected if VMs not yet created)' }}"
+  loop: "{{ vm_ping_results.results }}"
+  loop_control:
+    label: "{{ item.peer.key | default('skipped') }}"
+  when: item.skipped is not defined

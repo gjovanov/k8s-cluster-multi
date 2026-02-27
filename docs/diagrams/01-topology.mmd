@@ -1,0 +1,55 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1a1a2e', 'primaryTextColor': '#eee', 'primaryBorderColor': '#16213e', 'lineColor': '#e94560', 'secondaryColor': '#0f3460', 'tertiaryColor': '#533483'}}}%%
+graph TB
+    subgraph INTERNET["Internet"]
+        CLIENT([Clients])
+    end
+
+    subgraph MARS["mars - 94.130.141.98"]
+        direction TB
+        MARS_HOST[Bare Metal Host<br/>Hetzner Dedicated]
+        subgraph MARS_VMS["KVM VMs - 10.10.10.0/24"]
+            M1[k8s-master-1<br/>10.10.10.10<br/>2 vCPU / 8 GB]
+            W1[k8s-worker-1<br/>10.10.10.11<br/>4 vCPU / 32 GB]
+        end
+        MARS_HOST --- M1
+        MARS_HOST --- W1
+    end
+
+    subgraph ZEUS["zeus - 5.9.157.226"]
+        direction TB
+        ZEUS_HOST[Bare Metal Host<br/>Hetzner Dedicated]
+        subgraph ZEUS_VMS["KVM VMs - 10.10.20.0/24"]
+            M2[k8s-master-2<br/>10.10.20.10<br/>2 vCPU / 8 GB]
+            W2[k8s-worker-2<br/>10.10.20.11<br/>12 vCPU / 96 GB]
+        end
+        ZEUS_HOST --- M2
+        ZEUS_HOST --- W2
+    end
+
+    subgraph JUPITER["jupiter - 5.9.157.221"]
+        direction TB
+        JUPITER_HOST[Bare Metal Host<br/>Hetzner Dedicated]
+        subgraph JUPITER_VMS["KVM VMs - 10.10.30.0/24"]
+            M3[k8s-master-3<br/>10.10.30.10<br/>2 vCPU / 8 GB]
+            W3[k8s-worker-3<br/>10.10.30.11<br/>12 vCPU / 96 GB]
+        end
+        JUPITER_HOST --- M3
+        JUPITER_HOST --- W3
+    end
+
+    CLIENT --> MARS_HOST
+    CLIENT --> ZEUS_HOST
+    CLIENT --> JUPITER_HOST
+
+    MARS_HOST <-->|WireGuard<br/>wg0 / UDP 51820| ZEUS_HOST
+    MARS_HOST <-->|WireGuard<br/>wg0 / UDP 51820| JUPITER_HOST
+    ZEUS_HOST <-->|WireGuard<br/>wg0 / UDP 51820| JUPITER_HOST
+
+    classDef hostStyle fill:#16213e,stroke:#e94560,stroke-width:2px,color:#eee
+    classDef masterStyle fill:#0f3460,stroke:#e94560,stroke-width:2px,color:#eee
+    classDef workerStyle fill:#533483,stroke:#e94560,stroke-width:2px,color:#eee
+    classDef subnetStyle fill:#1a1a2e,stroke:#16213e,stroke-width:1px,color:#eee
+
+    class MARS_HOST,ZEUS_HOST,JUPITER_HOST hostStyle
+    class M1,M2,M3 masterStyle
+    class W1,W2,W3 workerStyle

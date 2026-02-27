@@ -1,0 +1,8 @@
+---
+# Phase 3: Install KVM/libvirt on all 3 hosts
+# Mars already has it but role is idempotent
+- name: "Phase 3: Host setup (KVM/libvirt)"
+  hosts: bare_metal
+  become: true
+  roles:
+    - host-setup

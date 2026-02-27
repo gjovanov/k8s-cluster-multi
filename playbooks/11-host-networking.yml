@@ -1,0 +1,7 @@
+---
+# Phase 11: iptables DNAT/SNAT for COTURN on each host
+- name: "Phase 11: Host networking (iptables)"
+  hosts: bare_metal
+  become: true
+  roles:
+    - host-networking

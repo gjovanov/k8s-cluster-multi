@@ -1,0 +1,7 @@
+---
+# Phase 13: Deploy monitoring stack (Prometheus, Grafana, AlertManager)
+- name: "Phase 13: Monitoring"
+  hosts: k8s-master-1
+  become: true
+  roles:
+    - monitoring

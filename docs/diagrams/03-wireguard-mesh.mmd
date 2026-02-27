@@ -1,0 +1,41 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1a1a2e', 'primaryTextColor': '#eee', 'lineColor': '#e94560', 'secondaryColor': '#0f3460'}}}%%
+graph LR
+    subgraph MARS["mars"]
+        MARS_WG["wg0: 10.10.0.1/24<br/>ListenPort: 51820<br/>Endpoint: 94.130.141.98:51820"]
+        MARS_SUB["Local Subnet<br/>10.10.10.0/24"]
+        MARS_WG --- MARS_SUB
+    end
+
+    subgraph ZEUS["zeus"]
+        ZEUS_WG["wg0: 10.10.0.2/24<br/>ListenPort: 51820<br/>Endpoint: 5.9.157.226:51820"]
+        ZEUS_SUB["Local Subnet<br/>10.10.20.0/24"]
+        ZEUS_WG --- ZEUS_SUB
+    end
+
+    subgraph JUPITER["jupiter"]
+        JUPITER_WG["wg0: 10.10.0.3/24<br/>ListenPort: 51820<br/>Endpoint: 5.9.157.221:51820"]
+        JUPITER_SUB["Local Subnet<br/>10.10.30.0/24"]
+        JUPITER_WG --- JUPITER_SUB
+    end
+
+    MARS_WG <-->|"Peer: zeus<br/>AllowedIPs: 10.10.0.2/32, 10.10.20.0/24"| ZEUS_WG
+    MARS_WG <-->|"Peer: jupiter<br/>AllowedIPs: 10.10.0.3/32, 10.10.30.0/24"| JUPITER_WG
+    ZEUS_WG <-->|"Peer: jupiter<br/>AllowedIPs: 10.10.0.3/32, 10.10.30.0/24"| JUPITER_WG
+
+    subgraph ROUTING["WireGuard PostUp Routing"]
+        R1["mars: route 10.10.20.0/24 via wg0<br/>mars: route 10.10.30.0/24 via wg0"]
+        R2["zeus: route 10.10.10.0/24 via wg0<br/>zeus: route 10.10.30.0/24 via wg0"]
+        R3["jupiter: route 10.10.10.0/24 via wg0<br/>jupiter: route 10.10.20.0/24 via wg0"]
+    end
+
+    MARS_WG -.-> R1
+    ZEUS_WG -.-> R2
+    JUPITER_WG -.-> R3
+
+    classDef wgStyle fill:#0f3460,stroke:#e94560,stroke-width:2px,color:#eee
+    classDef subnetStyle fill:#533483,stroke:#e94560,stroke-width:1px,color:#eee
+    classDef routeStyle fill:#1a1a2e,stroke:#16213e,stroke-width:1px,color:#aaa,font-size:11px
+
+    class MARS_WG,ZEUS_WG,JUPITER_WG wgStyle
+    class MARS_SUB,ZEUS_SUB,JUPITER_SUB subnetStyle
+    class R1,R2,R3 routeStyle

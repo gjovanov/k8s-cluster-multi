@@ -1,0 +1,17 @@
+#!/bin/bash
+# Re-apply COTURN iptables rules after Docker restart
+# Docker clobbers FORWARD chain on restart
+
+sleep 2
+
+# Re-apply COTURN iptables rules
+/usr/local/bin/coturn-iptables.sh || true
+
+# Re-add FORWARD rules for VM subnet
+VM_SUBNET="{{ bare_metal_hosts[host_name].vm_subnet }}"
+iptables -C FORWARD -d "$VM_SUBNET" -j ACCEPT 2>/dev/null || \
+  iptables -I FORWARD 1 -d "$VM_SUBNET" -j ACCEPT
+iptables -C FORWARD -s "$VM_SUBNET" -j ACCEPT 2>/dev/null || \
+  iptables -I FORWARD 1 -s "$VM_SUBNET" -j ACCEPT
+
+echo "Docker restart hook: iptables rules restored for {{ host_name }}"
