@@ -28,7 +28,7 @@ graph TB
         subgraph ALERTING["AlertManager"]
             AM["AlertManager<br/>kube-prom-alertmanager"]
             SMTP["SMTP Relay<br/>smtp.sendgrid.net:587"]
-            EMAIL["Email Notifications<br/>alerts@roomler.live"]
+            EMAIL["Email Notifications<br/>alerts@example.com"]
 
             AM -->|"SMTP"| SMTP
             SMTP --> EMAIL

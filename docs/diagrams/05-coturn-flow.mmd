@@ -2,8 +2,8 @@
 graph TB
     CLIENT([WebRTC Client])
 
-    subgraph MARS_FLOW["mars - 94.130.141.98"]
-        MARS_IFACE["eth0<br/>94.130.141.98"]
+    subgraph MARS_FLOW["mars - 198.51.100.10"]
+        MARS_IFACE["eth0<br/>198.51.100.10"]
         MARS_IPT["iptables DNAT<br/>COTURN_DNAT chain"]
         MARS_W["k8s-worker-1<br/>10.10.10.11"]
         MARS_COTURN["COTURN Pod<br/>hostNetwork: true<br/>:3478 / :5349 / :443<br/>:10000-13000 UDP"]
@@ -13,8 +13,8 @@ graph TB
         MARS_W --- MARS_COTURN
     end
 
-    subgraph ZEUS_FLOW["zeus - 5.9.157.226"]
-        ZEUS_IFACE["eth0<br/>5.9.157.226"]
+    subgraph ZEUS_FLOW["zeus - 198.51.100.20"]
+        ZEUS_IFACE["eth0<br/>198.51.100.20"]
         ZEUS_IPT["iptables DNAT<br/>COTURN_DNAT chain"]
         ZEUS_W["k8s-worker-2<br/>10.10.20.11"]
         ZEUS_COTURN["COTURN Pod<br/>hostNetwork: true<br/>:3478 / :5349 / :443<br/>:10000-13000 UDP"]
@@ -24,8 +24,8 @@ graph TB
         ZEUS_W --- ZEUS_COTURN
     end
 
-    subgraph JUPITER_FLOW["jupiter - 5.9.157.221"]
-        JUPITER_IFACE["eth0<br/>5.9.157.221"]
+    subgraph JUPITER_FLOW["jupiter - 198.51.100.30"]
+        JUPITER_IFACE["eth0<br/>198.51.100.30"]
         JUPITER_IPT["iptables DNAT<br/>COTURN_DNAT chain"]
         JUPITER_W["k8s-worker-3<br/>10.10.30.11"]
         JUPITER_COTURN["COTURN Pod<br/>hostNetwork: true<br/>:3478 / :5349 / :443<br/>:10000-13000 UDP"]
@@ -47,7 +47,7 @@ graph TB
     CLIENT -->|"TURN :3478<br/>TURNS :5349"| MARS_IFACE
     CLIENT -->|"TURN :3478<br/>TURNS :5349"| ZEUS_IFACE
     CLIENT -->|"TURN :3478<br/>TURNS :5349"| JUPITER_IFACE
-    CLIENT -->|"TURNS :443<br/>coturn.roomler.live"| SNI_IPTABLES
+    CLIENT -->|"TURNS :443<br/>coturn.example.com"| SNI_IPTABLES
 
     classDef clientStyle fill:#e94560,stroke:#1a1a2e,stroke-width:2px,color:#fff
     classDef ifaceStyle fill:#16213e,stroke:#e94560,stroke-width:2px,color:#eee

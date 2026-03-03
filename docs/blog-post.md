@@ -4,7 +4,7 @@
 
 ---
 
-So, remember [that blog post](https://github.com/gjovanov/k8s-cluster/blob/master/docs/blog-post.md) where I crammed an entire Kubernetes cluster into one Hetzner box? Three VMs, one master, two workers, COTURN, the works? It was beautiful. It ran like a charm. My apps were humming. My dashboards were green.
+So, remember that blog post where I crammed an entire Kubernetes cluster into one Hetzner box? Three VMs, one master, two workers, COTURN, the works? It was beautiful. It ran like a charm. My apps were humming. My dashboards were green.
 
 And then I thought: "What happens when mars goes down?"
 
@@ -48,7 +48,7 @@ graph TB
         CLIENT([Clients])
     end
 
-    subgraph MARS["mars - 94.130.141.98"]
+    subgraph MARS["mars - 198.51.100.10"]
         direction TB
         MARS_HOST[Bare Metal Host<br/>Hetzner Dedicated]
         subgraph MARS_VMS["KVM VMs - 10.10.10.0/24"]
@@ -59,7 +59,7 @@ graph TB
         MARS_HOST --- W1
     end
 
-    subgraph ZEUS["zeus - 5.9.157.226"]
+    subgraph ZEUS["zeus - 198.51.100.20"]
         direction TB
         ZEUS_HOST[Bare Metal Host<br/>Hetzner Dedicated]
         subgraph ZEUS_VMS["KVM VMs - 10.10.20.0/24"]
@@ -70,7 +70,7 @@ graph TB
         ZEUS_HOST --- W2
     end
 
-    subgraph JUPITER["jupiter - 5.9.157.221"]
+    subgraph JUPITER["jupiter - 198.51.100.30"]
         direction TB
         JUPITER_HOST[Bare Metal Host<br/>Hetzner Dedicated]
         subgraph JUPITER_VMS["KVM VMs - 10.10.30.0/24"]
@@ -108,9 +108,9 @@ Here's where it gets fun. We have *four* layers of networking, stacked like a pa
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1a1a2e', 'primaryTextColor': '#eee', 'lineColor': '#e94560', 'secondaryColor': '#0f3460'}}}%%
 graph TB
     subgraph PUBLIC["Public Network"]
-        MARS_PUB["mars<br/>94.130.141.98"]
-        ZEUS_PUB["zeus<br/>5.9.157.226"]
-        JUPITER_PUB["jupiter<br/>5.9.157.221"]
+        MARS_PUB["mars<br/>198.51.100.10"]
+        ZEUS_PUB["zeus<br/>198.51.100.20"]
+        JUPITER_PUB["jupiter<br/>198.51.100.30"]
     end
 
     subgraph WG_MESH["WireGuard Mesh - wg0"]
@@ -178,19 +178,19 @@ Enter WireGuard. It's a VPN. It's fast. It's simple. It's built into the Linux k
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1a1a2e', 'primaryTextColor': '#eee', 'lineColor': '#e94560', 'secondaryColor': '#0f3460'}}}%%
 graph LR
     subgraph MARS["mars"]
-        MARS_WG["wg0: 10.10.0.1/24<br/>ListenPort: 51820<br/>Endpoint: 94.130.141.98:51820"]
+        MARS_WG["wg0: 10.10.0.1/24<br/>ListenPort: 51820<br/>Endpoint: 198.51.100.10:51820"]
         MARS_SUB["Local Subnet<br/>10.10.10.0/24"]
         MARS_WG --- MARS_SUB
     end
 
     subgraph ZEUS["zeus"]
-        ZEUS_WG["wg0: 10.10.0.2/24<br/>ListenPort: 51820<br/>Endpoint: 5.9.157.226:51820"]
+        ZEUS_WG["wg0: 10.10.0.2/24<br/>ListenPort: 51820<br/>Endpoint: 198.51.100.20:51820"]
         ZEUS_SUB["Local Subnet<br/>10.10.20.0/24"]
         ZEUS_WG --- ZEUS_SUB
     end
 
     subgraph JUPITER["jupiter"]
-        JUPITER_WG["wg0: 10.10.0.3/24<br/>ListenPort: 51820<br/>Endpoint: 5.9.157.221:51820"]
+        JUPITER_WG["wg0: 10.10.0.3/24<br/>ListenPort: 51820<br/>Endpoint: 198.51.100.30:51820"]
         JUPITER_SUB["Local Subnet<br/>10.10.30.0/24"]
         JUPITER_WG --- JUPITER_SUB
     end
@@ -335,8 +335,8 @@ Now we have **three COTURN instances, one per host**, each with its own public I
 graph TB
     CLIENT([WebRTC Client])
 
-    subgraph MARS_FLOW["mars - 94.130.141.98"]
-        MARS_IFACE["eth0<br/>94.130.141.98"]
+    subgraph MARS_FLOW["mars - 198.51.100.10"]
+        MARS_IFACE["eth0<br/>198.51.100.10"]
         MARS_IPT["iptables DNAT<br/>COTURN_DNAT chain"]
         MARS_W["k8s-worker-1<br/>10.10.10.11"]
         MARS_COTURN["COTURN Pod<br/>hostNetwork: true<br/>:3478 / :5349 / :443<br/>:10000-13000 UDP"]
@@ -346,8 +346,8 @@ graph TB
         MARS_W --- MARS_COTURN
     end
 
-    subgraph ZEUS_FLOW["zeus - 5.9.157.226"]
-        ZEUS_IFACE["eth0<br/>5.9.157.226"]
+    subgraph ZEUS_FLOW["zeus - 198.51.100.20"]
+        ZEUS_IFACE["eth0<br/>198.51.100.20"]
         ZEUS_IPT["iptables DNAT<br/>COTURN_DNAT chain"]
         ZEUS_W["k8s-worker-2<br/>10.10.20.11"]
         ZEUS_COTURN["COTURN Pod<br/>hostNetwork: true<br/>:3478 / :5349 / :443<br/>:10000-13000 UDP"]
@@ -357,8 +357,8 @@ graph TB
         ZEUS_W --- ZEUS_COTURN
     end
 
-    subgraph JUPITER_FLOW["jupiter - 5.9.157.221"]
-        JUPITER_IFACE["eth0<br/>5.9.157.221"]
+    subgraph JUPITER_FLOW["jupiter - 198.51.100.30"]
+        JUPITER_IFACE["eth0<br/>198.51.100.30"]
         JUPITER_IPT["iptables DNAT<br/>COTURN_DNAT chain"]
         JUPITER_W["k8s-worker-3<br/>10.10.30.11"]
         JUPITER_COTURN["COTURN Pod<br/>hostNetwork: true<br/>:3478 / :5349 / :443<br/>:10000-13000 UDP"]
@@ -392,13 +392,13 @@ The beautiful part: lose a host, lose one COTURN instance. The other two keep re
 <details>
 <summary><strong>Deep Dive: The COTURN SNAT Gotcha</strong></summary>
 
-Here's a fun one that cost me half a day. When a COTURN pod on worker-1 (10.10.10.11) needs to relay media to a client that came in through zeus (5.9.157.226), the relay packet exits through mars's WireGuard tunnel. But the client expects the reply to come from zeus's public IP, not mars's.
+Here's a fun one that cost me half a day. When a COTURN pod on worker-1 (10.10.10.11) needs to relay media to a client that came in through zeus (198.51.100.20), the relay packet exits through mars's WireGuard tunnel. But the client expects the reply to come from zeus's public IP, not mars's.
 
 The fix: per-host SNAT rules that ensure outbound relay traffic from each worker gets rewritten to the correct public IP:
 
 ```bash
 # On mars
-iptables -t nat -A COTURN_SNAT -s 10.10.10.11 -p udp -m multiport --sports 10000:13000 -j SNAT --to-source 94.130.141.98
+iptables -t nat -A COTURN_SNAT -s 10.10.10.11 -p udp -m multiport --sports 10000:13000 -j SNAT --to-source 198.51.100.10
 ```
 
 Without this, clients would see relay packets arriving from the wrong IP and silently drop them. WebRTC is very particular about where its packets come from. Can't blame it, really.
@@ -455,7 +455,7 @@ flowchart TD
 Running it is almost anticlimactic:
 
 ```bash
-git clone https://github.com/gjovanov/k8s-cluster-multi.git
+git clone https://github.com/your-user/k8s-cluster-multi.git
 cd k8s-cluster-multi
 cp .env.example .env && vi .env    # add your secrets
 make setup                          # go make a sandwich
@@ -534,12 +534,12 @@ With a 6-node cluster and 248 GB of RAM, we're not just running COTURN. Here's t
 
 | App | Stack | Worker | Domain |
 |-----|-------|--------|--------|
-| **Roomler2** | Rust (Axum) + Vue 3 + mediasoup WebRTC | worker-3 | [roomler.ai](https://roomler.ai) |
-| **TickyTack** | Bun/Elysia.js + Vue 3 | worker-1 | [tickytack.app](https://tickytack.app) |
-| **LGR** | Bun/Elysia.js + Vue 3 (8 microservices) | worker-2 | [lgrai.app](https://lgrai.app) |
-| **Purestat** | Rust (Axum) + Vue 3 + ClickHouse | worker-2 | [purestat.ai](https://purestat.ai) |
-| **Ares** | 3 legacy apps + Redroid (Android in K8s!) | worker-3 | various |
-| **COTURN** | 3 relay instances | all workers | coturn.roomler.live |
+| **App 1** | Rust (Axum) + Vue 3 + mediasoup WebRTC | worker-3 | app1.example.com |
+| **App 2** | Bun/Elysia.js + Vue 3 | worker-1 | app2.example.com |
+| **App 3** | Bun/Elysia.js + Vue 3 (8 microservices) | worker-2 | app3.example.com |
+| **App 4** | Rust (Axum) + Vue 3 + ClickHouse | worker-2 | app4.example.com |
+| **App 5** | 3 legacy apps + Redroid (Android in K8s!) | worker-3 | various |
+| **COTURN** | 3 relay instances | all workers | coturn.example.com |
 | **Monitoring** | Prometheus + Grafana + AlertManager | system | internal |
 
 Twelve namespaces, running everything from a Rust WebRTC SFU to literal Android containers in Kubernetes. mars handles the nginx reverse proxy for all public domains. The workers handle the compute. The masters keep the peace.
@@ -586,9 +586,8 @@ On the roadmap:
 
 The entire infrastructure is open source:
 
-- **Multi-host HA cluster:** [github.com/gjovanov/k8s-cluster-multi](https://github.com/gjovanov/k8s-cluster-multi)
-- **Original single-host setup:** [github.com/gjovanov/k8s-cluster](https://github.com/gjovanov/k8s-cluster)
-- **Roomler2 (Rust + Vue 3 + mediasoup):** [github.com/gjovanov/roomler2](https://github.com/gjovanov/roomler2)
+- **Multi-host HA cluster:** (this repo)
+- **Original single-host setup:** (see companion single-host repo)
 
 Star the repos if this was useful, open an issue if something's broken, and if you successfully build your own multi-host cluster after reading this — drop me a line. I'll raise a coffee to your success. Actually, make it a beer. You'll have earned it.
 

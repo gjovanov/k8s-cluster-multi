@@ -4,7 +4,7 @@ graph TB
         CLIENT([Clients])
     end
 
-    subgraph MARS["mars - 94.130.141.98"]
+    subgraph MARS["mars - 198.51.100.10"]
         direction TB
         MARS_HOST[Bare Metal Host<br/>Hetzner Dedicated]
         subgraph MARS_VMS["KVM VMs - 10.10.10.0/24"]
@@ -15,7 +15,7 @@ graph TB
         MARS_HOST --- W1
     end
 
-    subgraph ZEUS["zeus - 5.9.157.226"]
+    subgraph ZEUS["zeus - 198.51.100.20"]
         direction TB
         ZEUS_HOST[Bare Metal Host<br/>Hetzner Dedicated]
         subgraph ZEUS_VMS["KVM VMs - 10.10.20.0/24"]
@@ -26,7 +26,7 @@ graph TB
         ZEUS_HOST --- W2
     end
 
-    subgraph JUPITER["jupiter - 5.9.157.221"]
+    subgraph JUPITER["jupiter - 198.51.100.30"]
         direction TB
         JUPITER_HOST[Bare Metal Host<br/>Hetzner Dedicated]
         subgraph JUPITER_VMS["KVM VMs - 10.10.30.0/24"]

@@ -1,19 +1,19 @@
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1a1a2e', 'primaryTextColor': '#eee', 'lineColor': '#e94560', 'secondaryColor': '#0f3460'}}}%%
 graph LR
     subgraph MARS["mars"]
-        MARS_WG["wg0: 10.10.0.1/24<br/>ListenPort: 51820<br/>Endpoint: 94.130.141.98:51820"]
+        MARS_WG["wg0: 10.10.0.1/24<br/>ListenPort: 51820<br/>Endpoint: 198.51.100.10:51820"]
         MARS_SUB["Local Subnet<br/>10.10.10.0/24"]
         MARS_WG --- MARS_SUB
     end
 
     subgraph ZEUS["zeus"]
-        ZEUS_WG["wg0: 10.10.0.2/24<br/>ListenPort: 51820<br/>Endpoint: 5.9.157.226:51820"]
+        ZEUS_WG["wg0: 10.10.0.2/24<br/>ListenPort: 51820<br/>Endpoint: 198.51.100.20:51820"]
         ZEUS_SUB["Local Subnet<br/>10.10.20.0/24"]
         ZEUS_WG --- ZEUS_SUB
     end
 
     subgraph JUPITER["jupiter"]
-        JUPITER_WG["wg0: 10.10.0.3/24<br/>ListenPort: 51820<br/>Endpoint: 5.9.157.221:51820"]
+        JUPITER_WG["wg0: 10.10.0.3/24<br/>ListenPort: 51820<br/>Endpoint: 198.51.100.30:51820"]
         JUPITER_SUB["Local Subnet<br/>10.10.30.0/24"]
         JUPITER_WG --- JUPITER_SUB
     end

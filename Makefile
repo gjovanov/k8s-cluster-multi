@@ -15,11 +15,11 @@ ifneq (,$(wildcard $(ENV_FILE)))
   export
 endif
 
-HOST_USER ?= gjovanov
+HOST_USER ?= deployer
 HOME_DIR ?= /home/$(HOST_USER)
-MARS_IP ?= 94.130.141.98
-ZEUS_IP ?= 5.9.157.226
-JUPITER_IP ?= 5.9.157.221
+MARS_IP ?= 198.51.100.10
+ZEUS_IP ?= 198.51.100.20
+JUPITER_IP ?= 198.51.100.30
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \

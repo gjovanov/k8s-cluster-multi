@@ -2,7 +2,7 @@
 # ============================================================
 # Environment-driven configuration (from .env)
 # ============================================================
-host_user: "{{ lookup('env', 'HOST_USER') | default('gjovanov', true) }}"
+host_user: "{{ lookup('env', 'HOST_USER') | default('deployer', true) }}"
 home_dir: "{{ lookup('env', 'HOME_DIR') | default('/home/' + host_user, true) }}"
 
 # ============================================================
@@ -10,21 +10,21 @@ home_dir: "{{ lookup('env', 'HOME_DIR') | default('/home/' + host_user, true) }}
 # ============================================================
 bare_metal_hosts:
   mars:
-    public_ip: "{{ lookup('env', 'MARS_PUBLIC_IP') | default('94.130.141.98', true) }}"
+    public_ip: "{{ lookup('env', 'MARS_PUBLIC_IP') | default('198.51.100.10', true) }}"
     wg_ip: "10.10.0.1"
     vm_subnet: "10.10.10.0/24"
     vm_gateway: "10.10.10.1"
     vm_bridge: "virbr1"
     interface: "{{ lookup('env', 'MARS_INTERFACE') | default('eth0', true) }}"
   zeus:
-    public_ip: "{{ lookup('env', 'ZEUS_PUBLIC_IP') | default('5.9.157.226', true) }}"
+    public_ip: "{{ lookup('env', 'ZEUS_PUBLIC_IP') | default('198.51.100.20', true) }}"
     wg_ip: "10.10.0.2"
     vm_subnet: "10.10.20.0/24"
     vm_gateway: "10.10.20.1"
     vm_bridge: "virbr1"
     interface: "{{ lookup('env', 'ZEUS_INTERFACE') | default('enp5s0', true) }}"
   jupiter:
-    public_ip: "{{ lookup('env', 'JUPITER_PUBLIC_IP') | default('5.9.157.221', true) }}"
+    public_ip: "{{ lookup('env', 'JUPITER_PUBLIC_IP') | default('198.51.100.30', true) }}"
     wg_ip: "10.10.0.3"
     vm_subnet: "10.10.30.0/24"
     vm_gateway: "10.10.30.1"
@@ -161,7 +161,7 @@ haproxy_backend_port: 6443
 # ============================================================
 # COTURN
 # ============================================================
-coturn_realm: "{{ lookup('env', 'COTURN_REALM') | default('roomler.live', true) }}"
+coturn_realm: "{{ lookup('env', 'COTURN_REALM') | default('example.com', true) }}"
 coturn_auth_secret: "{{ lookup('env', 'COTURN_AUTH_SECRET') }}"
 coturn_image: "coturn/coturn:latest"
 coturn_turn_port: 3478
@@ -170,8 +170,8 @@ coturn_alt_tls_port: 443
 coturn_min_port: 10000
 coturn_max_port: 13000
 coturn_namespace: "coturn"
-coturn_tls_cert: "{{ lookup('env', 'COTURN_TLS_CERT') | default(home_dir + '/cert/roomler.live.fullchain.pem', true) }}"
-coturn_tls_key: "{{ lookup('env', 'COTURN_TLS_KEY') | default(home_dir + '/cert/roomler.live.key.pem', true) }}"
+coturn_tls_cert: "{{ lookup('env', 'COTURN_TLS_CERT') | default(home_dir + '/cert/example.com.fullchain.pem', true) }}"
+coturn_tls_key: "{{ lookup('env', 'COTURN_TLS_KEY') | default(home_dir + '/cert/example.com.key.pem', true) }}"
 
 coturn_workers:
   - name: coturn-worker-1
@@ -217,7 +217,7 @@ coturn_dnat_rules:
 # ============================================================
 # SNI Proxy (mars only)
 # ============================================================
-sni_proxy_hostname: "{{ lookup('env', 'SNI_PROXY_HOSTNAME') | default('coturn.roomler.live', true) }}"
+sni_proxy_hostname: "{{ lookup('env', 'SNI_PROXY_HOSTNAME') | default('coturn.example.com', true) }}"
 sni_proxy_listen_port: 4443
 sni_proxy_public_ip: "{{ bare_metal_hosts.mars.public_ip }}"
 sni_proxy_backend_ip: "10.10.10.11"
@@ -231,8 +231,8 @@ monitoring_helm_release: "kube-prom"
 monitoring_helm_chart_version: "65.1.0"
 grafana_admin_password: "{{ lookup('env', 'GRAFANA_ADMIN_PASSWORD') }}"
 alertmanager_smtp_host: "smtp.sendgrid.net:587"
-alertmanager_smtp_from: "{{ lookup('env', 'ALERTMANAGER_EMAIL_FROM') | default('alerts@roomler.live', true) }}"
-alertmanager_smtp_to: "{{ lookup('env', 'ALERTMANAGER_EMAIL_TO') | default('goran.jovanov@gmail.com', true) }}"
+alertmanager_smtp_from: "{{ lookup('env', 'ALERTMANAGER_EMAIL_FROM') | default('alerts@example.com', true) }}"
+alertmanager_smtp_to: "{{ lookup('env', 'ALERTMANAGER_EMAIL_TO') | default('admin@example.com', true) }}"
 alertmanager_smtp_user: "{{ lookup('env', 'SMTP_USER') }}"
 alertmanager_smtp_password: "{{ lookup('env', 'SMTP_PASSWORD') }}"
 prometheus_retention: "14d"

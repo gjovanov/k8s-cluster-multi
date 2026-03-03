@@ -2,13 +2,16 @@
 .ansible_cache/
 *.retry
 
-# SSH private keys
+# SSH keys (private + public)
 files/ssh/*/k8s_ed25519
 files/ssh/*/k8s_ed25519.ppk
+files/ssh/*/*.pub
 files/ssh/bootstrap/id_ed25519
+files/ssh/bootstrap/id_ed25519.pub
 
-# WireGuard private keys
+# WireGuard keys (private + public)
 files/wireguard/*/private.key
+files/wireguard/*/public.key
 
 # Kubeconfig
 files/kubeconfig

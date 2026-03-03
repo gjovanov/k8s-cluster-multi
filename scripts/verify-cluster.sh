@@ -11,7 +11,7 @@ if [ -f "${PROJECT_DIR}/.env" ]; then
   set -a; source "${PROJECT_DIR}/.env"; set +a
 fi
 
-HOST_USER="${HOST_USER:-gjovanov}"
+HOST_USER="${HOST_USER:-deployer}"
 HOME_DIR="${HOME_DIR:-/home/${HOST_USER}}"
 
 # Colors
@@ -29,9 +29,9 @@ fail() { echo -e "  ${RED}FAIL${NC} $1"; ((FAIL++)); }
 warn() { echo -e "  ${YELLOW}WARN${NC} $1"; ((WARN++)); }
 
 HOSTS=(
-  "mars:${MARS_PUBLIC_IP:-94.130.141.98}"
-  "zeus:${ZEUS_PUBLIC_IP:-5.9.157.226}"
-  "jupiter:${JUPITER_PUBLIC_IP:-5.9.157.221}"
+  "mars:${MARS_PUBLIC_IP:-198.51.100.10}"
+  "zeus:${ZEUS_PUBLIC_IP:-198.51.100.20}"
+  "jupiter:${JUPITER_PUBLIC_IP:-198.51.100.30}"
 )
 
 VM_SUBNETS=(
@@ -74,7 +74,7 @@ done
 # ---- 3. Cross-host VM Connectivity ----
 echo ""
 echo "=== 3. Cross-host VM Connectivity ==="
-MARS_IP="${MARS_PUBLIC_IP:-94.130.141.98}"
+MARS_IP="${MARS_PUBLIC_IP:-198.51.100.10}"
 # Test from mars master-1 to zeus master-2
 if ssh -o ConnectTimeout=5 "${HOST_USER}@${MARS_IP}" "ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -i ${PROJECT_DIR}/files/ssh/mars/k8s_ed25519 ubuntu@10.10.10.10 'ping -c 1 -W 3 10.10.20.10'" &>/dev/null; then
   pass "master-1 (mars) -> master-2 (zeus)"

@@ -55,7 +55,7 @@ k8s-worker-3   Ready    worker          v1.31.14   10.10.30.11    jupiter
               |                |                |
      +--------v------+ +------v--------+ +-----v---------+
      |     mars       | |     zeus       | |    jupiter     |
-     | 94.130.141.98  | | 5.9.157.226    | | 5.9.157.221   |
+     | 198.51.100.10  | | 198.51.100.20    | | 198.51.100.30   |
      |  wg: 10.10.0.1 | |  wg: 10.10.0.2 | |  wg: 10.10.0.3|
      |                | |                | |                |
      | master-1  .10  | | master-2  .10  | | master-3  .10  |
@@ -72,12 +72,12 @@ See [docs/diagrams/01-topology.mmd](docs/diagrams/01-topology.mmd) for the full 
 
 | Host | Public IP | WG IP | VM | VM IP | Role | vCPU | RAM |
 |------|-----------|-------|----|-------|------|------|-----|
-| mars | 94.130.141.98 | 10.10.0.1 | k8s-master-1 | 10.10.10.10 | master | 2 | 8 GB |
-| mars | 94.130.141.98 | 10.10.0.1 | k8s-worker-1 | 10.10.10.11 | worker | 4 | 32 GB |
-| zeus | 5.9.157.226 | 10.10.0.2 | k8s-master-2 | 10.10.20.10 | master | 2 | 8 GB |
-| zeus | 5.9.157.226 | 10.10.0.2 | k8s-worker-2 | 10.10.20.11 | worker | 12 | 96 GB |
-| jupiter | 5.9.157.221 | 10.10.0.3 | k8s-master-3 | 10.10.30.10 | master | 2 | 8 GB |
-| jupiter | 5.9.157.221 | 10.10.0.3 | k8s-worker-3 | 10.10.30.11 | worker | 12 | 96 GB |
+| mars | 198.51.100.10 | 10.10.0.1 | k8s-master-1 | 10.10.10.10 | master | 2 | 8 GB |
+| mars | 198.51.100.10 | 10.10.0.1 | k8s-worker-1 | 10.10.10.11 | worker | 4 | 32 GB |
+| zeus | 198.51.100.20 | 10.10.0.2 | k8s-master-2 | 10.10.20.10 | master | 2 | 8 GB |
+| zeus | 198.51.100.20 | 10.10.0.2 | k8s-worker-2 | 10.10.20.11 | worker | 12 | 96 GB |
+| jupiter | 198.51.100.30 | 10.10.0.3 | k8s-master-3 | 10.10.30.10 | master | 2 | 8 GB |
+| jupiter | 198.51.100.30 | 10.10.0.3 | k8s-worker-3 | 10.10.30.11 | worker | 12 | 96 GB |
 
 ### Key Design Decisions
 
@@ -86,7 +86,7 @@ See [docs/diagrams/01-topology.mmd](docs/diagrams/01-topology.mmd) for the full 
 - **containerd** is configured with the full default config (`containerd config default`), then patched to set `SystemdCgroup = true` and `sandbox_image = "registry.k8s.io/pause:3.10"` to match kubeadm's expectation. This is critical -- a mismatch causes pod sandbox recreation storms.
 - **COTURN** runs as 3 individual Deployments with `hostNetwork: true`, one pinned to each worker node via `nodeSelector`. Host-level iptables DNAT forwards TURN/TURNS ports from the public IP to the worker VM.
 - **Cilium bootstrap**: During `kubeadm init` on the first master, Cilium is installed with `operator.replicas=1` (single schedulable node). After workers join, the operator is scaled to 2 replicas via `helm upgrade`.
-- **SNI proxy** on mars handles `TURNS :443` for `coturn.roomler.live`, forwarding TLS traffic to the COTURN pod on worker-1 (since port 443 on mars is used by the nginx Docker container).
+- **SNI proxy** on mars handles `TURNS :443` for `coturn.example.com`, forwarding TLS traffic to the COTURN pod on worker-1 (since port 443 on mars is used by the nginx Docker container).
 
 ## Prerequisites
 
@@ -95,7 +95,7 @@ See [docs/diagrams/01-topology.mmd](docs/diagrams/01-topology.mmd) for the full 
    make collections
    ```
 
-2. **SSH access** to all 3 bare-metal hosts as `HOST_USER` (default: `gjovanov`). For zeus and jupiter (PuTTY-provisioned), convert keys first:
+2. **SSH access** to all 3 bare-metal hosts as `HOST_USER` (default: `deployer`). For zeus and jupiter (PuTTY-provisioned), convert keys first:
    ```bash
    # Place your PuTTY key at ~/.ssh/putty.ppk, then:
    make convert-putty-key
@@ -283,24 +283,24 @@ Copy `.env.example` to `.env` and fill in values:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `HOST_USER` | SSH user on bare-metal hosts | `gjovanov` |
+| `HOST_USER` | SSH user on bare-metal hosts | `deployer` |
 | `HOME_DIR` | Home directory path | `/home/HOST_USER` |
-| `MARS_PUBLIC_IP` | Mars public IP | `94.130.141.98` |
-| `ZEUS_PUBLIC_IP` | Zeus public IP | `5.9.157.226` |
-| `JUPITER_PUBLIC_IP` | Jupiter public IP | `5.9.157.221` |
+| `MARS_PUBLIC_IP` | Mars public IP | `198.51.100.10` |
+| `ZEUS_PUBLIC_IP` | Zeus public IP | `198.51.100.20` |
+| `JUPITER_PUBLIC_IP` | Jupiter public IP | `198.51.100.30` |
 | `MARS_INTERFACE` | Mars network interface | `eth0` |
 | `ZEUS_INTERFACE` | Zeus network interface | `enp5s0` |
 | `JUPITER_INTERFACE` | Jupiter network interface | `enp5s0` |
 | `COTURN_AUTH_SECRET` | COTURN shared secret | (required) |
-| `COTURN_REALM` | COTURN realm | `roomler.live` |
-| `COTURN_TLS_CERT` | Path to TLS fullchain | `HOME_DIR/cert/roomler.live.fullchain.pem` |
-| `COTURN_TLS_KEY` | Path to TLS private key | `HOME_DIR/cert/roomler.live.key.pem` |
+| `COTURN_REALM` | COTURN realm | `example.com` |
+| `COTURN_TLS_CERT` | Path to TLS fullchain | `HOME_DIR/cert/example.com.fullchain.pem` |
+| `COTURN_TLS_KEY` | Path to TLS private key | `HOME_DIR/cert/example.com.key.pem` |
 | `GRAFANA_ADMIN_PASSWORD` | Grafana admin password | (required) |
 | `SMTP_USER` | SendGrid SMTP user | `apikey` |
 | `SMTP_PASSWORD` | SendGrid API key | (required) |
-| `ALERTMANAGER_EMAIL_TO` | Alert recipient | `goran.jovanov@gmail.com` |
-| `ALERTMANAGER_EMAIL_FROM` | Alert sender address | `alerts@roomler.live` |
-| `SNI_PROXY_HOSTNAME` | SNI proxy hostname | `coturn.roomler.live` |
+| `ALERTMANAGER_EMAIL_TO` | Alert recipient | `admin@example.com` |
+| `ALERTMANAGER_EMAIL_FROM` | Alert sender address | `alerts@example.com` |
+| `SNI_PROXY_HOSTNAME` | SNI proxy hostname | `coturn.example.com` |
 | `SNI_PROXY_DOCKER_CONTAINER` | Docker container for SNI | `nginx` |
 
 ### Key Files
@@ -321,9 +321,9 @@ Copy `.env.example` to `.env` and fill in values:
 ### Bare-Metal Hosts
 
 ```bash
-make ssh-mars      # SSH to mars (94.130.141.98)
-make ssh-zeus      # SSH to zeus (5.9.157.226)
-make ssh-jupiter   # SSH to jupiter (5.9.157.221)
+make ssh-mars      # SSH to mars (198.51.100.10)
+make ssh-zeus      # SSH to zeus (198.51.100.20)
+make ssh-jupiter   # SSH to jupiter (198.51.100.30)
 ```
 
 ### VMs (via ProxyJump for remote hosts)
@@ -400,7 +400,7 @@ make ssh-mars
 sudo wg show wg0
 
 # Check COTURN ports
-for ip in 94.130.141.98 5.9.157.226 5.9.157.221; do
+for ip in 198.51.100.10 198.51.100.20 198.51.100.30; do
   echo "=== $ip ==="
   timeout 3 bash -c "echo | openssl s_client -connect ${ip}:5349 2>/dev/null | head -5"
 done
@@ -469,10 +469,10 @@ Remote VMs (zeus, jupiter) require ProxyJump through the bare-metal host. If dir
 
 ```bash
 # Correct way (via ProxyJump)
-ssh -i files/ssh/zeus/k8s_ed25519 -o ProxyJump=HOST_USER@5.9.157.226 ubuntu@10.10.20.10
+ssh -i files/ssh/zeus/k8s_ed25519 -o ProxyJump=HOST_USER@198.51.100.20 ubuntu@10.10.20.10
 
 # Check WireGuard is up
-ssh HOST_USER@5.9.157.226 "sudo wg show wg0"
+ssh HOST_USER@198.51.100.20 "sudo wg show wg0"
 ```
 
 ### VMs Not Reachable After Reboot
@@ -631,9 +631,9 @@ containerd config default > /etc/containerd/config.toml
 
 | Host | Public IP | WireGuard IP | Interface | VM Bridge | VM Subnet |
 |------|-----------|-------------|-----------|-----------|-----------|
-| mars | 94.130.141.98 | 10.10.0.1 | eth0 | virbr1 / 10.10.10.1 | 10.10.10.0/24 |
-| zeus | 5.9.157.226 | 10.10.0.2 | enp5s0 | virbr1 / 10.10.20.1 | 10.10.20.0/24 |
-| jupiter | 5.9.157.221 | 10.10.0.3 | enp5s0 | virbr1 / 10.10.30.1 | 10.10.30.0/24 |
+| mars | 198.51.100.10 | 10.10.0.1 | eth0 | virbr1 / 10.10.10.1 | 10.10.10.0/24 |
+| zeus | 198.51.100.20 | 10.10.0.2 | enp5s0 | virbr1 / 10.10.20.1 | 10.10.20.0/24 |
+| jupiter | 198.51.100.30 | 10.10.0.3 | enp5s0 | virbr1 / 10.10.30.1 | 10.10.30.0/24 |
 
 ### Virtual Machines
 
@@ -673,9 +673,9 @@ containerd config default > /etc/containerd/config.toml
 
 | Host | Public IP | DNAT Target | Worker | Realm |
 |------|-----------|-------------|--------|-------|
-| mars | 94.130.141.98 | 10.10.10.11 | k8s-worker-1 | roomler.live |
-| zeus | 5.9.157.226 | 10.10.20.11 | k8s-worker-2 | roomler.live |
-| jupiter | 5.9.157.221 | 10.10.30.11 | k8s-worker-3 | roomler.live |
+| mars | 198.51.100.10 | 10.10.10.11 | k8s-worker-1 | example.com |
+| zeus | 198.51.100.20 | 10.10.20.11 | k8s-worker-2 | example.com |
+| jupiter | 198.51.100.30 | 10.10.30.11 | k8s-worker-3 | example.com |
 
 ### Node Labels
 

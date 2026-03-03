@@ -1,5 +1,5 @@
 ---
-# Bootstrap new hosts (zeus, jupiter): create gjovanov user, SSH, hostname
+# Bootstrap new hosts (zeus, jupiter): create deploy user, SSH, hostname
 # Runs as root on bare_metal_bootstrap group
 
 - name: Set hostname
@@ -18,7 +18,7 @@
     line: '%sudo   ALL=(ALL:ALL) NOPASSWD:ALL'
     validate: 'visudo -cf %s'
 
-- name: Create gjovanov user
+- name: Create deploy user
   user:
     name: "{{ host_user }}"
     groups: sudo
@@ -27,7 +27,7 @@
     create_home: true
     state: present
 
-- name: Create .ssh directory for gjovanov
+- name: Create .ssh directory for deploy user
   file:
     path: "/home/{{ host_user }}/.ssh"
     state: directory
@@ -46,7 +46,7 @@
 
 - name: Read mars SSH public key (for cross-host access)
   set_fact:
-    mars_pubkey: "{{ lookup('file', home_dir + '/.ssh/id_secunet.pub') }}"
+    mars_pubkey: "{{ lookup('file', home_dir + '/.ssh/id_ed25519.pub') }}"
   ignore_errors: true
 
 - name: Add mars SSH public key to authorized_keys
@@ -70,7 +70,7 @@
     line: 'PasswordAuthentication no'
   notify: restart sshd
 
-- name: Verify gjovanov can sudo
+- name: Verify deploy user can sudo
   become: true
   become_user: "{{ host_user }}"
   command: sudo -n whoami

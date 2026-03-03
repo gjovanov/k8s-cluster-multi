@@ -1,6 +1,6 @@
 ---
 # Phase 1: Bootstrap new hosts (zeus, jupiter)
-# Creates gjovanov user, sets up SSH, hostnames
+# Creates deploy user, sets up SSH, hostnames
 # Requires: SSH access as root (using converted PuTTY key)
 - name: "Phase 1: Bootstrap new hosts"
   hosts: bare_metal_bootstrap

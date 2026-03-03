@@ -4,7 +4,7 @@
 
 ---
 
-So, remember [that blog post](https://medium.com/@goran.jovanov) where I crammed an entire Kubernetes cluster into one Hetzner box? Three VMs, one master, two workers, COTURN, the works? It was beautiful. It ran like a charm. My apps were humming. My dashboards were green.
+So, remember that blog post where I crammed an entire Kubernetes cluster into one Hetzner box? Three VMs, one master, two workers, COTURN, the works? It was beautiful. It ran like a charm. My apps were humming. My dashboards were green.
 
 And then I thought: "What happens when mars goes down?"
 
@@ -40,7 +40,7 @@ The old cluster was a studio apartment. The new one is a three-bedroom house wit
 
 Three Hetzner dedicated servers, spread across their Frankfurt datacenter. Each runs KVM with two VMs — one master, one worker. Connected by a WireGuard mesh that makes them think they're neighbors.
 
-![Physical Topology](https://raw.githubusercontent.com/gjovanov/k8s-cluster-multi/main/docs/diagrams/01-topology.svg)
+![Physical Topology](diagrams/01-topology.png)
 
 Three hosts. Six VMs. One cluster. Zero single points of failure. Well, except for my own sanity — that had exactly one replica with no failover.
 
@@ -48,7 +48,7 @@ Three hosts. Six VMs. One cluster. Zero single points of failure. Well, except f
 
 Here's where it gets fun. We have *four* layers of networking, stacked like a particularly ambitious lasagna:
 
-![Network Layers](https://raw.githubusercontent.com/gjovanov/k8s-cluster-multi/main/docs/diagrams/02-network.svg)
+![Network Layers](diagrams/02-network.png)
 
 From top to bottom:
 
@@ -67,7 +67,7 @@ The fundamental challenge of a multi-host cluster is: *how do VMs on different p
 
 Enter WireGuard. It's a VPN. It's fast. It's simple. It's built into the Linux kernel. And it turns three servers in the same datacenter into what feels like one big happy network.
 
-![WireGuard Mesh](https://raw.githubusercontent.com/gjovanov/k8s-cluster-multi/main/docs/diagrams/03-wireguard-mesh.svg)
+![WireGuard Mesh](diagrams/03-wireguard-mesh.png)
 
 Each host peers with the other two (full mesh). The `AllowedIPs` include both the WireGuard IP *and* the remote VM subnet — so mars can route to `10.10.20.0/24` (zeus's VMs) and `10.10.30.0/24` (jupiter's VMs) through the tunnel.
 
@@ -89,7 +89,7 @@ The old setup had one master. One API server. One etcd. If it went down, `kubect
 
 The new setup? Three masters, three etcd members, and — here's the punchline — **HAProxy on every single node**.
 
-![HA Control Plane](https://raw.githubusercontent.com/gjovanov/k8s-cluster-multi/main/docs/diagrams/04-ha-control-plane.svg)
+![HA Control Plane](diagrams/04-ha-control-plane.png)
 
 **Why HAProxy on every node?** Because every kubelet needs to talk to the API server. If we pointed them all at one master, we're back to SPOF territory. Instead, every VM runs HAProxy on `127.0.0.1:8443`, round-robining across all three API servers. Kubelet talks to localhost, HAProxy handles the rest.
 
@@ -113,7 +113,7 @@ In the old setup, we had two COTURN pods sharing two public IPs on one host. Cut
 
 Now we have **three COTURN instances, one per host**, each with its own public IP and its own iptables forwarding chain:
 
-![COTURN Traffic Flow](https://raw.githubusercontent.com/gjovanov/k8s-cluster-multi/main/docs/diagrams/05-coturn-flow.svg)
+![COTURN Traffic Flow](diagrams/05-coturn-flow.png)
 
 Each host has its own `COTURN_DNAT` iptables chain that forwards TURN traffic (3478, 5349, 10000-13000) from the host's public IP to the worker VM. Each COTURN pod runs with `hostNetwork: true` and knows its own public/private IP mapping via the `external-ip` config.
 
@@ -127,12 +127,12 @@ The beautiful part: lose a host, lose one COTURN instance. The other two keep re
 
 The entire cluster bootstraps from zero through 15 Ansible phases. It's like a recipe, except instead of ending with a cake, you end up with a production-grade Kubernetes cluster.
 
-![Deployment Phases](https://raw.githubusercontent.com/gjovanov/k8s-cluster-multi/main/docs/diagrams/06-deployment-phases.svg)
+![Deployment Phases](diagrams/06-deployment-phases.png)
 
 Running it is almost anticlimactic:
 
 ```bash
-git clone https://github.com/gjovanov/k8s-cluster-multi.git
+git clone https://github.com/your-user/k8s-cluster-multi.git
 cd k8s-cluster-multi
 cp .env.example .env && vi .env    # add your secrets
 make setup                          # go make a sandwich
@@ -145,7 +145,7 @@ The `make verify` script runs 9 categories of health checks: VM connectivity, Wi
 
 Each VM goes through a 5-step pipeline — from cloud image to fully configured K8s-ready node:
 
-![VM Provisioning](https://raw.githubusercontent.com/gjovanov/k8s-cluster-multi/main/docs/diagrams/07-vm-provisioning.svg)
+![VM Provisioning](diagrams/07-vm-provisioning.png)
 
 Cloud-init handles the first-boot configuration: hostname, static IP, SSH keys, packages, and sysctl tuning. No clicking through installers. Boot the VM, it's ready.
 
@@ -155,7 +155,7 @@ Cloud-init handles the first-boot configuration: hostname, static IP, SSH keys, 
 
 We deploy the full **kube-prometheus-stack** via Helm. Because running a 6-node cluster without monitoring is like driving at night with the headlights off.
 
-![Monitoring Stack](https://raw.githubusercontent.com/gjovanov/k8s-cluster-multi/main/docs/diagrams/08-monitoring.svg)
+![Monitoring Stack](diagrams/08-monitoring.png)
 
 Fourteen days of metric retention, email alerts via SendGrid, and a custom COTURN dashboard that shows relay allocations, bandwidth, and error rates. It's oddly soothing to watch those graphs. Dashboard therapy, I call it.
 
@@ -167,11 +167,11 @@ With a 6-node cluster and 248 GB of RAM, we're not just running COTURN. Here's t
 
 | App | Stack | Worker | Domain |
 |-----|-------|--------|--------|
-| **Roomler2** | Rust (Axum) + Vue 3 + mediasoup WebRTC | worker-3 | [roomler.ai](https://roomler.ai) |
-| **TickyTack** | Bun/Elysia.js + Vue 3 | worker-1 | [tickytack.app](https://tickytack.app) |
-| **LGR** | Bun/Elysia.js + Vue 3 (8 microservices) | worker-2 | [lgrai.app](https://lgrai.app) |
-| **Purestat** | Rust (Axum) + Vue 3 + ClickHouse | worker-2 | [purestat.ai](https://purestat.ai) |
-| **Ares** | 3 legacy apps + Redroid (Android in K8s!) | worker-3 | various |
+| **App 1** | Rust (Axum) + Vue 3 + mediasoup WebRTC | worker-3 | app1.example.com |
+| **App 2** | Bun/Elysia.js + Vue 3 | worker-1 | app2.example.com |
+| **App 3** | Bun/Elysia.js + Vue 3 (8 microservices) | worker-2 | app3.example.com |
+| **App 4** | Rust (Axum) + Vue 3 + ClickHouse | worker-2 | app4.example.com |
+| **App 5** | 3 legacy apps + Redroid (Android in K8s!) | worker-3 | various |
 
 Twelve namespaces, running everything from a Rust WebRTC SFU to literal Android containers in Kubernetes.
 
@@ -210,9 +210,8 @@ On the roadmap:
 
 The entire infrastructure is open source:
 
-- **Multi-host HA cluster:** [github.com/gjovanov/k8s-cluster-multi](https://github.com/gjovanov/k8s-cluster-multi)
-- **Original single-host setup:** [github.com/gjovanov/k8s-cluster](https://github.com/gjovanov/k8s-cluster)
-- **Roomler2 (Rust + Vue 3 + mediasoup):** [github.com/gjovanov/roomler2](https://github.com/gjovanov/roomler2)
+- **Multi-host HA cluster:** (this repo)
+- **Original single-host setup:** (see companion single-host repo)
 
 Star the repos if this was useful, open an issue if something's broken, and if you successfully build your own multi-host cluster after reading this — drop me a line. I'll raise a coffee to your success. Actually, make it a beer. You'll have earned it.
 
