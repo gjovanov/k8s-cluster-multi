@@ -98,6 +98,15 @@
   debug:
     msg: "{{ net_info.stdout_lines }}"
 
+- name: Configure libvirt-guests for clean VM restart
+  lineinfile:
+    path: /etc/default/libvirt-guests
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  loop:
+    - { regexp: '^#?ON_BOOT=', line: 'ON_BOOT=ignore' }
+    - { regexp: '^#?ON_SHUTDOWN=', line: 'ON_SHUTDOWN=shutdown' }
+
 - name: Enable IP forwarding (persistent)
   sysctl:
     name: net.ipv4.ip_forward
