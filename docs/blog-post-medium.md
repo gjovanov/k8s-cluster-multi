@@ -193,6 +193,26 @@ Because apparently I didn't learn enough painful lessons the first time:
 
 **6. COTURN SNAT + cross-host relay is non-obvious.** Per-host SNAT rules for relay port ranges. Without them, clients silently drop packets from unexpected source IPs.
 
+**7. Libvirt and WireGuard race on iptables after reboot.** When the host reboots, WireGuard inserts iptables rules first. Then libvirt starts and pushes its chains above WireGuard's, blocking cross-host VM traffic and masquerading source IPs (breaking etcd TLS). Fix: a `wg-fix-iptables.service` systemd oneshot that re-applies idempotent PostUp rules *after* libvirt starts.
+
+**8. `libvirt-guests` will pause your VMs.** Default `ON_SHUTDOWN=suspend` saves VM state to disk; restore often leaves VMs `paused`. Fix: `ON_BOOT=ignore` + `ON_SHUTDOWN=shutdown` + `virsh autostart`.
+
+**9. Docker images accumulate fast.** 70GB of dangling images + 36GB of build cache on one host. Fix: weekly cron cleanup (keep last 3 tags per repo) + kubelet image GC thresholds lowered to 70%/60%.
+
+---
+
+## Host Reboot Resilience
+
+After all these fixes, the cluster survives bare-metal host reboots with zero manual intervention:
+
+```
+Host reboots → WireGuard starts → libvirtd starts (re-creates iptables)
+→ VMs auto-start → wg-fix-iptables.service fixes iptables ordering
+→ K8s nodes rejoin → pods reschedule → cluster healthy
+```
+
+Verified by sequentially rebooting both zeus and jupiter: 6/6 nodes Ready, 69/69 pods healthy, zero manual intervention both times.
+
 ---
 
 ## What's Next?

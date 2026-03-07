@@ -568,6 +568,43 @@ If you run Docker on the bare-metal hosts (we do, for nginx), its restart hook f
 **6. COTURN SNAT + cross-host relay is non-obvious.**
 When COTURN on worker-1 relays media to a client that connected via zeus's IP, the reply packet must be SNAT'd to zeus's public IP, not mars's. Without per-host SNAT rules for relay port ranges, clients silently drop packets because the source IP doesn't match. This one was a beautiful 4-hour debugging session.
 
+**7. Libvirt and WireGuard have an iptables race on reboot.**
+When a bare-metal host reboots, WireGuard starts and inserts its iptables ACCEPT rules at the top of the FORWARD chain. Then libvirt starts and inserts its own chains (`LIBVIRT_FWI`, `LIBVIRT_FWO`, `LIBVIRT_FWX`) *above* WireGuard's rules. Result: cross-host VM traffic gets rejected by libvirt's restrictive rules, etcd can't peer, and kube-apiserver crash-loops. The anti-masquerade RETURN rules in NAT POSTROUTING suffer the same fate — `LIBVIRT_PRT`'s MASQUERADE rules run first, rewriting VM source IPs to the WireGuard host IP (`10.10.0.x`), which breaks etcd TLS certificate validation.
+
+The fix: a systemd oneshot service (`wg-fix-iptables.service`) that runs *after* both libvirt and WireGuard, with a 5-second delay. It re-applies the PostUp script, which is now idempotent (deletes existing rules before inserting). The rules use `-I FORWARD 1` and `-I POSTROUTING 1` to ensure they land above libvirt's chains. Tested and verified: both hosts can reboot with zero manual intervention — VMs auto-start, iptables auto-fix, K8s nodes rejoin, all pods come back healthy.
+
+**8. `libvirt-guests` will pause your VMs on reboot.**
+By default, `libvirt-guests.service` uses `ON_SHUTDOWN=suspend` (saves VM memory state to disk) and `ON_BOOT=start` (restores from saved state). This often leaves VMs in a `paused` state instead of `running`, with stale network state that prevents etcd and K8s from functioning. The fix: `ON_BOOT=ignore` + `ON_SHUTDOWN=shutdown` + `virsh autostart` on each VM. VMs get a clean shutdown and a fresh start, every time.
+
+**9. Docker images accumulate faster than you think.**
+On mars (which runs Docker for nginx and other non-K8s services), we found 70GB of dangling images and 36GB of build cache. A weekly cron job (`scripts/docker-image-cleanup.sh`) now keeps only the last 3 tags per repository, prunes build cache older than 7 days, and cleans unused volumes. On the K8s side, kubelet's image GC thresholds were lowered from the defaults (85%/80%) to 70%/60%, with a 7-day maximum image age.
+
+---
+
+# Part 8: Host Reboot Resilience — The Cluster That Heals Itself
+
+After all the lessons above, the cluster now survives bare-metal host reboots with zero manual intervention. Here's the boot sequence:
+
+```
+Host reboots
+  → systemd starts wg-quick@wg0 (WireGuard tunnel + PostUp iptables)
+  → systemd starts libvirtd (re-creates iptables chains)
+  → libvirt-guests.service: ON_BOOT=ignore (skip managed save restore)
+  → virsh autostart: VMs start fresh
+  → wg-fix-iptables.service (After=libvirtd, 5s delay):
+      re-runs PostUp → iptables FORWARD/NAT rules in correct order
+  → VMs boot, kubelet connects to HAProxy → HAProxy → kube-apiserver
+  → K8s nodes rejoin cluster, pods reschedule
+```
+
+The correct iptables order after boot:
+```
+FORWARD:     wg0↔virbr1 ACCEPT  →  LIBVIRT_FWI/FWO/FWX
+POSTROUTING: anti-masquerade RETURN  →  LIBVIRT_PRT (MASQUERADE)
+```
+
+We verified this by rebooting zeus and jupiter sequentially. Both times: 6/6 nodes Ready, 69/69 pods healthy, zero manual intervention. The cluster refused to die. Mission accomplished.
+
 ---
 
 # What's Next?

@@ -625,6 +625,38 @@ containerd config default > /etc/containerd/config.toml
 
 **Fix**: Parametrize the interface name per host in `inventory/group_vars/all.yml` via `MARS_INTERFACE` / `ZEUS_INTERFACE` / `JUPITER_INTERFACE` env vars.
 
+### 6. Libvirt iptables Race Condition on Host Reboot
+
+**Symptom**: After bare-metal host reboot, K8s nodes come up but etcd peers can't communicate. kube-apiserver enters CrashLoopBackOff. Error: `tls: "10.10.0.3" does not match any of DNSNames`.
+
+**Root cause**: On boot, WireGuard's PostUp script inserts iptables rules (FORWARD ACCEPT for wg0↔virbr1, and NAT RETURN anti-masquerade rules). Libvirt starts afterwards and inserts its own chains (`LIBVIRT_FWI/FWO/FWX`, `LIBVIRT_PRT`) above the WireGuard rules. This causes: (a) cross-host VM traffic rejected by `LIBVIRT_FWI`, and (b) VM source IPs masqueraded by `LIBVIRT_PRT`, breaking etcd TLS peer validation.
+
+**Fix**: Three-part solution:
+1. **Idempotent PostUp script** — deletes existing rules before inserting, uses `-I POSTROUTING 1` to insert above `LIBVIRT_PRT`
+2. **`wg-fix-iptables.service`** — systemd oneshot that runs after `libvirtd.service` and `wg-quick@wg0.service` with a 5s delay, re-applying the PostUp rules
+3. **Correct rule position** — FORWARD rules use `-I FORWARD 1`, NAT rules use `-I POSTROUTING 1` (not just `-I POSTROUTING`)
+
+### 7. VMs Stuck in "Paused" State After Host Reboot
+
+**Symptom**: After host reboot, `virsh list --all` shows VMs in `paused` state instead of `running`.
+
+**Root cause**: `libvirt-guests.service` defaults to `ON_SHUTDOWN=suspend` (saves VM state via `virsh managedsave`) and `ON_BOOT=start` (restores from saved state). The restore can leave VMs in a `paused` state, especially when the saved state includes stale network connections.
+
+**Fix**: Configure `/etc/default/libvirt-guests`:
+```
+ON_BOOT=ignore       # Don't restore from managed save; let autostart handle it
+ON_SHUTDOWN=shutdown  # Clean shutdown instead of suspend/managedsave
+```
+Combined with `virsh autostart` on each VM, this ensures VMs start fresh after reboot.
+
+### 8. Docker Image Disk Space Exhaustion
+
+**Symptom**: Disk space on hosts fills up over time from accumulated Docker images and build cache.
+
+**Fix**: Two-part approach:
+1. **Docker (mars)**: Weekly cron job (`scripts/docker-image-cleanup.sh`) keeps last 3 tags per repository, prunes dangling images, build cache >7 days, and unused volumes
+2. **K8s nodes (containerd)**: Kubelet image GC thresholds lowered to 70%/60% (from default 85%/80%) with `imageMaximumGCAge: 168h`
+
 ## IP Reference Table
 
 ### Bare-Metal Hosts
@@ -732,6 +764,7 @@ k8s-cluster-multi/
   scripts/
     verify-cluster.sh               # 9-category health check (PASS/FAIL/WARN)
     teardown.sh                     # Teardown with --keep-* flags
+    docker-image-cleanup.sh         # Weekly Docker image pruning (keep last N tags)
   files/
     ssh/{mars,zeus,jupiter}/        # Per-host SSH key pairs (private git-ignored)
     ssh/bootstrap/                  # Bootstrap key (converted from PuTTY)
@@ -739,4 +772,5 @@ k8s-cluster-multi/
     wireguard/{mars,zeus,jupiter}/  # WireGuard key pairs (private git-ignored)
   docs/
     diagrams/                       # 8 Mermaid architecture diagrams
+    host-reboot-recovery.md         # Auto-recovery after host reboot (iptables, VMs, boot sequence)
 ```
