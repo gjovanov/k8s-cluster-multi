@@ -1,0 +1,16 @@
+[Unit]
+Description=Fix WireGuard iptables rules after libvirt
+After=libvirtd.service wg-quick@wg0.service
+Requires=wg-quick@wg0.service
+# Wait for libvirt to fully initialize and insert its iptables chains
+After=libvirt-guests.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Small delay to ensure libvirt has inserted its iptables chains
+ExecStartPre=/bin/sleep 5
+ExecStart=/usr/local/bin/wg-postup.sh
+
+[Install]
+WantedBy=multi-user.target

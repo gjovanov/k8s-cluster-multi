@@ -57,6 +57,10 @@
         --cpu host-passthrough --os-variant ubuntu22.04
         --graphics none --boot hd --import --noautoconsole
 
+- name: "{{ vm.name }} - Enable VM autostart"
+  command: virsh autostart {{ vm.name }}
+  changed_when: false
+
 - name: "{{ vm.name }} - Ensure VM is running"
   command: virsh start {{ vm.name }}
   failed_when: false

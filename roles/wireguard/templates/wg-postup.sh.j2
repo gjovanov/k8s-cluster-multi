@@ -1,18 +1,27 @@
 #!/usr/bin/env bash
 set -e
 
-# Enable forwarding between wg0 and the local VM bridge
-# INSERT at top of FORWARD chain so rules are evaluated BEFORE libvirt's
-# LIBVIRT_FWI/FWO/FWX chains which reject non-established traffic
-iptables -I FORWARD 1 -i {{ wg_interface }} -o {{ bare_metal_hosts[host_name].vm_bridge }} -j ACCEPT
-iptables -I FORWARD 1 -i {{ bare_metal_hosts[host_name].vm_bridge }} -o {{ wg_interface }} -j ACCEPT
+# Idempotent: remove existing rules before inserting to avoid duplicates
+# after restarts or re-runs
 
-# Anti-masquerade rules: prevent libvirt's NAT masquerade from rewriting
-# source IPs on cross-host VM traffic routed through WireGuard.
+# ---- FORWARD rules ----
+# Enable forwarding between wg0 and the local VM bridge.
+# INSERT at top of FORWARD chain so rules are evaluated BEFORE libvirt's
+# LIBVIRT_FWI/FWO/FWX chains which reject non-established traffic.
+iptables -D FORWARD -i {{ wg_interface }} -o {{ bare_metal_hosts[host_name].vm_bridge }} -j ACCEPT 2>/dev/null || true
+iptables -D FORWARD -i {{ bare_metal_hosts[host_name].vm_bridge }} -o {{ wg_interface }} -j ACCEPT 2>/dev/null || true
+iptables -I FORWARD 1 -i {{ bare_metal_hosts[host_name].vm_bridge }} -o {{ wg_interface }} -j ACCEPT
+iptables -I FORWARD 1 -i {{ wg_interface }} -o {{ bare_metal_hosts[host_name].vm_bridge }} -j ACCEPT
+
+# ---- Anti-masquerade NAT rules ----
+# Prevent libvirt's NAT masquerade from rewriting source IPs on cross-host
+# VM traffic routed through WireGuard.
 # INSERT RETURN rules at the top of nat POSTROUTING so they are evaluated
-# before libvirt's MASQUERADE rules.
+# BEFORE libvirt's LIBVIRT_PRT chain (which contains the MASQUERADE rules).
 {% for peer_name, peer in bare_metal_hosts.items() if peer_name != host_name %}
 # {{ host_name }} <-> {{ peer_name }}
-iptables -t nat -I POSTROUTING -s {{ bare_metal_hosts[host_name].vm_subnet }} -d {{ peer.vm_subnet }} -j RETURN
-iptables -t nat -I POSTROUTING -s {{ peer.vm_subnet }} -d {{ bare_metal_hosts[host_name].vm_subnet }} -j RETURN
+iptables -t nat -D POSTROUTING -s {{ bare_metal_hosts[host_name].vm_subnet }} -d {{ peer.vm_subnet }} -j RETURN 2>/dev/null || true
+iptables -t nat -D POSTROUTING -s {{ peer.vm_subnet }} -d {{ bare_metal_hosts[host_name].vm_subnet }} -j RETURN 2>/dev/null || true
+iptables -t nat -I POSTROUTING 1 -s {{ peer.vm_subnet }} -d {{ bare_metal_hosts[host_name].vm_subnet }} -j RETURN
+iptables -t nat -I POSTROUTING 1 -s {{ bare_metal_hosts[host_name].vm_subnet }} -d {{ peer.vm_subnet }} -j RETURN
 {% endfor %}

@@ -25,3 +25,6 @@ apiServer:
 apiVersion: kubelet.config.k8s.io/v1beta1
 kind: KubeletConfiguration
 cgroupDriver: systemd
+imageGCHighThresholdPercent: 70
+imageGCLowThresholdPercent: 60
+imageMaximumGCAge: 168h
