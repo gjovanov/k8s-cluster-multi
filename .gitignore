@@ -19,6 +19,9 @@ files/kubeconfig
 # iptables backup
 backup/
 
+# Logs
+logs/
+
 # Environment
 .env
 

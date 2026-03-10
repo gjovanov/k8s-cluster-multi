@@ -212,7 +212,7 @@ coturn_dnat_rules:
     vm_subnet: "10.10.30.0/24"
     protocols: [tcp, udp]
     ports: [3478, 5349]
-    port_ranges: ["10000:13000"]
+    port_ranges: ["10000:13000", "40000:49999"]  # COTURN relay + mediasoup RTC
 
 # ============================================================
 # SNI Proxy (mars only)

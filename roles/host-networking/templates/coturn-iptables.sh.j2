@@ -8,6 +8,15 @@ SNAT_CHAIN="COTURN_SNAT"
 # Get this host's rules
 PUBLIC_IP="{{ coturn_dnat_rules[host_name].public_ip }}"
 DEST_IP="{{ coturn_dnat_rules[host_name].dest_ip }}"
+VM_SUBNET="{{ coturn_dnat_rules[host_name].vm_subnet }}"
+
+# --- FORWARD rules for DNAT traffic (public internet -> VM via virbr) ---
+# libvirt's LIBVIRT_FWI chain blocks NEW connections to VMs by default;
+# these rules allow DNAT'd traffic to reach the VMs
+iptables -D FORWARD -d $VM_SUBNET -j ACCEPT 2>/dev/null || true
+iptables -D FORWARD -s $VM_SUBNET -j ACCEPT 2>/dev/null || true
+iptables -I FORWARD 1 -d $VM_SUBNET -j ACCEPT
+iptables -I FORWARD 2 -s $VM_SUBNET -j ACCEPT
 
 # Create/flush DNAT chain
 iptables -t nat -N "$DNAT_CHAIN" 2>/dev/null || iptables -t nat -F "$DNAT_CHAIN"
@@ -39,11 +48,13 @@ iptables -t nat -A "$OUTPUT_DNAT_CHAIN" -d "$PUBLIC_IP" -p {{ proto }} --dport {
 # Skip SNAT for internal cluster traffic (WireGuard mesh)
 iptables -t nat -A "$SNAT_CHAIN" -d 10.10.0.0/16 -j RETURN
 
-# SNAT for relay traffic (preserve source ports)
-iptables -t nat -A "$SNAT_CHAIN" -s "$DEST_IP" -p udp --sport {{ coturn_dnat_rules[host_name].port_ranges[0] }} -j SNAT --to-source "$PUBLIC_IP"
-iptables -t nat -A "$SNAT_CHAIN" -s "$DEST_IP" -p tcp --sport {{ coturn_dnat_rules[host_name].port_ranges[0] }} -j SNAT --to-source "$PUBLIC_IP"
+# SNAT for relay/RTC traffic (preserve source ports)
+{% for range in coturn_dnat_rules[host_name].port_ranges %}
+iptables -t nat -A "$SNAT_CHAIN" -s "$DEST_IP" -p udp --sport {{ range }} -j SNAT --to-source "$PUBLIC_IP"
+iptables -t nat -A "$SNAT_CHAIN" -s "$DEST_IP" -p tcp --sport {{ range }} -j SNAT --to-source "$PUBLIC_IP"
+{% endfor %}
 
 # General SNAT for non-relay outbound (internet traffic only)
-iptables -t nat -A "$SNAT_CHAIN" -s "$DEST_IP" ! -d {{ coturn_dnat_rules[host_name].vm_subnet }} -j SNAT --to-source "$PUBLIC_IP"
+iptables -t nat -A "$SNAT_CHAIN" -s "$DEST_IP" ! -d $VM_SUBNET -j SNAT --to-source "$PUBLIC_IP"
 
-echo "COTURN iptables rules applied for {{ host_name }} ($PUBLIC_IP -> $DEST_IP)"
+echo "iptables rules applied for {{ host_name }} ($PUBLIC_IP -> $DEST_IP)"
