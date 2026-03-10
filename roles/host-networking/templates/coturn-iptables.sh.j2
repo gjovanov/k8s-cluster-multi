@@ -40,8 +40,8 @@ iptables -t nat -A "$DNAT_CHAIN" -d "$PUBLIC_IP" -p {{ proto }} --dport {{ port 
 iptables -t nat -A "$OUTPUT_DNAT_CHAIN" -d "$PUBLIC_IP" -p {{ proto }} --dport {{ port }} -j DNAT --to-destination "$DEST_IP":{{ port }}
 {% endfor %}
 {% for range in coturn_dnat_rules[host_name].port_ranges %}
-iptables -t nat -A "$DNAT_CHAIN" -d "$PUBLIC_IP" -p {{ proto }} --dport {{ range }} -j DNAT --to-destination "$DEST_IP":{{ range }}
-iptables -t nat -A "$OUTPUT_DNAT_CHAIN" -d "$PUBLIC_IP" -p {{ proto }} --dport {{ range }} -j DNAT --to-destination "$DEST_IP":{{ range }}
+iptables -t nat -A "$DNAT_CHAIN" -d "$PUBLIC_IP" -p {{ proto }} --dport {{ range }} -j DNAT --to-destination "$DEST_IP":{{ range | replace(':', '-') }}
+iptables -t nat -A "$OUTPUT_DNAT_CHAIN" -d "$PUBLIC_IP" -p {{ proto }} --dport {{ range }} -j DNAT --to-destination "$DEST_IP":{{ range | replace(':', '-') }}
 {% endfor %}
 {% endfor %}
 
