@@ -7,6 +7,9 @@ SNAT_CHAIN="COTURN_SNAT"
 
 # Get this host's rules
 PUBLIC_IP="{{ coturn_dnat_rules[host_name].public_ip }}"
+{% if coturn_dnat_rules[host_name].secondary_ip is defined %}
+SECONDARY_IP="{{ coturn_dnat_rules[host_name].secondary_ip }}"
+{% endif %}
 DEST_IP="{{ coturn_dnat_rules[host_name].dest_ip }}"
 VM_SUBNET="{{ coturn_dnat_rules[host_name].vm_subnet }}"
 
@@ -34,15 +37,37 @@ iptables -t nat -C POSTROUTING -j "$SNAT_CHAIN" 2>/dev/null || \
   iptables -t nat -I POSTROUTING 1 -j "$SNAT_CHAIN"
 
 {% for proto in coturn_dnat_rules[host_name].protocols %}
-# DNAT for {{ proto }} ports
+# DNAT for {{ proto }} ports (PRIMARY_IP{% if coturn_dnat_rules[host_name].secondary_ip is defined %} + SECONDARY_IP{% endif %})
 {% for port in coturn_dnat_rules[host_name].ports %}
 iptables -t nat -A "$DNAT_CHAIN" -d "$PUBLIC_IP" -p {{ proto }} --dport {{ port }} -j DNAT --to-destination "$DEST_IP":{{ port }}
 iptables -t nat -A "$OUTPUT_DNAT_CHAIN" -d "$PUBLIC_IP" -p {{ proto }} --dport {{ port }} -j DNAT --to-destination "$DEST_IP":{{ port }}
+{% if coturn_dnat_rules[host_name].secondary_ip is defined %}
+iptables -t nat -A "$DNAT_CHAIN" -d "$SECONDARY_IP" -p {{ proto }} --dport {{ port }} -j DNAT --to-destination "$DEST_IP":{{ port }}
+iptables -t nat -A "$OUTPUT_DNAT_CHAIN" -d "$SECONDARY_IP" -p {{ proto }} --dport {{ port }} -j DNAT --to-destination "$DEST_IP":{{ port }}
+{% endif %}
 {% endfor %}
 {% for range in coturn_dnat_rules[host_name].port_ranges %}
 iptables -t nat -A "$DNAT_CHAIN" -d "$PUBLIC_IP" -p {{ proto }} --dport {{ range }} -j DNAT --to-destination "$DEST_IP":{{ range | replace(':', '-') }}
 iptables -t nat -A "$OUTPUT_DNAT_CHAIN" -d "$PUBLIC_IP" -p {{ proto }} --dport {{ range }} -j DNAT --to-destination "$DEST_IP":{{ range | replace(':', '-') }}
+{% if coturn_dnat_rules[host_name].secondary_ip is defined %}
+iptables -t nat -A "$DNAT_CHAIN" -d "$SECONDARY_IP" -p {{ proto }} --dport {{ range }} -j DNAT --to-destination "$DEST_IP":{{ range | replace(':', '-') }}
+iptables -t nat -A "$OUTPUT_DNAT_CHAIN" -d "$SECONDARY_IP" -p {{ proto }} --dport {{ range }} -j DNAT --to-destination "$DEST_IP":{{ range | replace(':', '-') }}
+{% endif %}
 {% endfor %}
+{% if coturn_dnat_rules[host_name].primary_redirects is defined %}
+# PRIMARY-IP port redirects (e.g. TURNS-over-:443 → coturn :5349)
+{% for redir in coturn_dnat_rules[host_name].primary_redirects %}
+iptables -t nat -A "$DNAT_CHAIN" -d "$PUBLIC_IP" -p {{ proto }} --dport {{ redir.dport }} -j DNAT --to-destination "$DEST_IP":{{ redir.tport }}
+iptables -t nat -A "$OUTPUT_DNAT_CHAIN" -d "$PUBLIC_IP" -p {{ proto }} --dport {{ redir.dport }} -j DNAT --to-destination "$DEST_IP":{{ redir.tport }}
+{% endfor %}
+{% endif %}
+{% if coturn_dnat_rules[host_name].secondary_ip is defined and coturn_dnat_rules[host_name].secondary_redirects is defined %}
+# SECONDARY-IP port redirects (e.g. TURNS-over-:443 → coturn :5349)
+{% for redir in coturn_dnat_rules[host_name].secondary_redirects %}
+iptables -t nat -A "$DNAT_CHAIN" -d "$SECONDARY_IP" -p {{ proto }} --dport {{ redir.dport }} -j DNAT --to-destination "$DEST_IP":{{ redir.tport }}
+iptables -t nat -A "$OUTPUT_DNAT_CHAIN" -d "$SECONDARY_IP" -p {{ proto }} --dport {{ redir.dport }} -j DNAT --to-destination "$DEST_IP":{{ redir.tport }}
+{% endfor %}
+{% endif %}
 {% endfor %}
 
 # Skip SNAT for internal cluster traffic (WireGuard mesh)

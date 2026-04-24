@@ -194,11 +194,16 @@ coturn_workers:
 coturn_dnat_rules:
   mars:
     public_ip: "{{ bare_metal_hosts.mars.public_ip }}"
+    secondary_ip: "94.130.141.74"
     dest_ip: "10.10.10.11"
     vm_subnet: "10.10.10.0/24"
     protocols: [tcp, udp]
     ports: [3478, 5349]
     port_ranges: ["10000:13000"]
+    # Mars primary_ip :443 is owned by the host nginx container; only the
+    # secondary IP can serve TURNS-over-:443 (redirected to coturn :5349).
+    secondary_redirects:
+      - { dport: 443, tport: 5349 }
   zeus:
     public_ip: "{{ bare_metal_hosts.zeus.public_ip }}"
     dest_ip: "10.10.20.11"
@@ -206,6 +211,9 @@ coturn_dnat_rules:
     protocols: [tcp, udp]
     ports: [3478, 5349]
     port_ranges: ["10000:13000"]
+    # Zeus has no nginx on :443; primary_ip can serve TURNS-over-:443 directly.
+    primary_redirects:
+      - { dport: 443, tport: 5349 }
   jupiter:
     public_ip: "{{ bare_metal_hosts.jupiter.public_ip }}"
     dest_ip: "10.10.30.11"
@@ -213,6 +221,8 @@ coturn_dnat_rules:
     protocols: [tcp, udp]
     ports: [3478, 5349]
     port_ranges: ["10000:13000", "40000:49999"]  # COTURN relay + mediasoup RTC
+    primary_redirects:
+      - { dport: 443, tport: 5349 }
 
 # ============================================================
 # SNI Proxy (mars only)
