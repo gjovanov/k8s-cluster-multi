@@ -27,12 +27,26 @@ host_firewall_jupiter_extra: false
 # UnexpectedListenerOnNode alert fires if any drift persists for >15m.
 host_hardening_expected_tcp:
   - 22       # sshd
+  - 53       # dnsmasq + systemd-resolve (loopback only)
   - 80       # nginx (host docker)
   - 443      # nginx (host docker)
+  - 631      # cupsd (TODO: disable — not needed on a server)
+  - 2000     # asterisk SIP/IAX
+  - 3000     # node
+  - 3080     # bun
+  - 3333     # bun
   - 3478     # turnserver (host) + COTURN_DNAT for VM coturn
+  - 4099     # bun
+  - 4200     # bun (clawui)
+  - 5000     # docker-proxy (roomler-registry — bound to 127.0.0.1)
   - 5349     # turnserver (host) + COTURN_DNAT for VM coturn
-  # Docker-proxy bindings still on 0.0.0.0 (TODO: rebind to 127.0.0.1):
-  - 27018    # lgr-mongo
+  - 6379     # docker-proxy (roomler-ai-redis-1 — TODO rebind 127.0.0.1)
+  - 8443     # haproxy K8s API LB (loopback only)
+  - 9000     # docker-proxy (roomler-ai-minio-1)
+  - 9001     # docker-proxy (roomler-ai-minio-1 console)
+  - 9088     # asterisk
+  - 9100     # node-exporter (only via WG mesh)
+  # Docker-proxy bindings still on 0.0.0.0 (firewall blocks externally; rebind 127.0.0.1 is cleanup):
   - 4001     # lgr-portal
   - 4010     # lgr-accounting
   - 4020     # lgr-invoicing
@@ -41,19 +55,20 @@ host_hardening_expected_tcp:
   - 4050     # lgr-hr
   - 4060     # lgr-crm
   - 4070     # lgr-erp
-  - 4099     # bun
-  - 3080     # bun
-  - 3333     # bun
-  - 3000     # node
-  - 2000     # asterisk
-  - 9100     # node-exporter (loopback only ideally)
+  - 27018    # lgr-mongo
 host_hardening_expected_udp:
+  - 53       # dnsmasq + systemd-resolve
+  - 67       # libvirt dnsmasq DHCP
   - 80
   - 443      # QUIC
+  - 2727     # asterisk
   - 3478
+  - 4433     # oxmux-agent QUIC
+  - 4520     # asterisk
+  - 4569     # asterisk
+  - 5000     # asterisk
   - 5349
   - 51820    # wireguard
-  - 4433     # oxmux-agent QUIC
-  - 4789     # docker swarm vxlan (legacy?)
-  - 60000    # mosh range start (60000-61000 — listed as singleton; expand if needed)
+  # ephemeral oxmux-agent + asterisk + dnsmasq UDP ports are NOT allow-listed
+  # (drift alert tolerates short bursts via the 15m persistence window).
 
