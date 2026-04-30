@@ -22,6 +22,7 @@ host_hardening_expected_tcp:
   - 9100       # node-exporter (only via WG mesh)
 host_hardening_expected_udp:
   - 53         # dnsmasq + systemd-resolve
+  - 67         # libvirt dnsmasq DHCP server for the VM subnet (loopback / virbr1 only)
   - 51820      # WireGuard
   # libvirt dnsmasq picks an ephemeral high UDP port for upstream queries; we
   # do NOT allow-list ephemeral ranges here — the drift alert will fire if it
