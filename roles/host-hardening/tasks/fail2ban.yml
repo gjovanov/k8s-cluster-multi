@@ -1,0 +1,32 @@
+---
+# fail2ban for SSH — bans IPs that fail SSH auth 3+ times in 10 min for 1 h.
+
+- name: Install fail2ban
+  ansible.builtin.apt:
+    name: fail2ban
+    state: present
+    update_cache: yes
+
+- name: Configure fail2ban jail (sshd)
+  ansible.builtin.copy:
+    dest: /etc/fail2ban/jail.d/00-sshd.local
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [DEFAULT]
+      bantime  = 1h
+      findtime = 10m
+      maxretry = 3
+      backend  = systemd
+
+      [sshd]
+      enabled = true
+      mode    = aggressive
+  notify: Restart fail2ban
+
+- name: Enable + start fail2ban
+  ansible.builtin.systemd:
+    name: fail2ban
+    enabled: yes
+    state: started

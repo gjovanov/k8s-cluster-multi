@@ -1,0 +1,44 @@
+#!/bin/bash
+# Daily port allow-list audit. Writes a Prometheus textfile metric:
+#   host_unexpected_listener{port=...,proto=...,process=...} 1
+# Node-exporter ships these to Prometheus; an alert fires on any positive sample.
+#
+# The expected-listener allow-list comes from inventory and is rendered into
+# this script at deploy time.
+
+set -uo pipefail
+
+EXPECTED_TCP=({% for p in (host_hardening_expected_tcp | default([])) %}{{ p }} {% endfor %})
+EXPECTED_UDP=({% for p in (host_hardening_expected_udp | default([])) %}{{ p }} {% endfor %})
+
+OUTPUT=/var/lib/node_exporter/textfile_collector/host_unexpected_listener.prom
+TMP=$(mktemp)
+
+cat > "$TMP" <<EOF
+# HELP host_unexpected_listener 1 if a port not on the allow-list is listening
+# TYPE host_unexpected_listener gauge
+EOF
+
+is_expected() {
+  local proto=$1 port=$2
+  local list_var="EXPECTED_${proto^^}[@]"
+  for p in "${!list_var}"; do
+    [[ "$p" == "$port" ]] && return 0
+  done
+  return 1
+}
+
+# TCP
+ss -tlnp 2>/dev/null | awk 'NR>1 {split($4, a, ":"); print a[length(a)], $6}' | sort -u | while read port proc; do
+  [[ -z "$port" ]] && continue
+  is_expected tcp "$port" || echo "host_unexpected_listener{proto=\"tcp\",port=\"$port\",process=$(echo "$proc" | sed 's/[",]/_/g')} 1" >> "$TMP"
+done
+
+# UDP
+ss -ulnp 2>/dev/null | awk 'NR>1 {split($4, a, ":"); print a[length(a)], $6}' | sort -u | while read port proc; do
+  [[ -z "$port" ]] && continue
+  is_expected udp "$port" || echo "host_unexpected_listener{proto=\"udp\",port=\"$port\",process=$(echo "$proc" | sed 's/[",]/_/g')} 1" >> "$TMP"
+done
+
+mv "$TMP" "$OUTPUT"
+echo "audit complete; $(grep -c host_unexpected_listener "$OUTPUT") drift entries"

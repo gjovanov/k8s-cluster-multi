@@ -1,0 +1,59 @@
+---
+# Mars (94.130.141.98 + 94.130.141.74) — host firewall allow-list.
+#
+# Mars is the front-of-house: hosts the docker nginx container (for all web
+# apps), Docker Registry v2, ArgoCD reverse-proxy, ClawUI, NanoClaw, asterisk,
+# audio-waveform, oxmux-agent, plus the mars-side coturn TURN server.
+host_firewall_allowed_tcp:
+  - 80           # HTTP (nginx redirects to 443)
+  - 443          # HTTPS (nginx — roomler.ai/lgrai.app/oxmux.app/argocd.roomler.ai/registry.roomler.ai/etc.)
+  - 3478         # COTURN (also DNAT'd to worker-1)
+  - 5349         # TURNS
+host_firewall_allowed_udp:
+  - 80           # HTTP/3 unlikely on 80, but kept symmetric
+  - 443          # HTTP/3 (QUIC)
+  - 3478         # TURN/STUN UDP
+  - 5349         # DTLS / alt
+  - 51820        # WireGuard (also matched by host_firewall_wg_peers)
+
+# COTURN port range for mars (10000-13000)
+host_firewall_vm_subnet: "10.10.10.0/24"
+host_firewall_vm_dest_ip: "10.10.10.11"
+host_firewall_jupiter_extra: false
+
+# host_hardening — list of ports legitimately listening on this host. The
+# daily `listening-ports-audit.sh` cron compares actual listeners against this
+# set and writes a Prometheus textfile metric for each drift entry. The
+# UnexpectedListenerOnNode alert fires if any drift persists for >15m.
+host_hardening_expected_tcp:
+  - 22       # sshd
+  - 80       # nginx (host docker)
+  - 443      # nginx (host docker)
+  - 3478     # turnserver (host) + COTURN_DNAT for VM coturn
+  - 5349     # turnserver (host) + COTURN_DNAT for VM coturn
+  # Docker-proxy bindings still on 0.0.0.0 (TODO: rebind to 127.0.0.1):
+  - 27018    # lgr-mongo
+  - 4001     # lgr-portal
+  - 4010     # lgr-accounting
+  - 4020     # lgr-invoicing
+  - 4030     # lgr-warehouse
+  - 4040     # lgr-payroll
+  - 4050     # lgr-hr
+  - 4060     # lgr-crm
+  - 4070     # lgr-erp
+  - 4099     # bun
+  - 3080     # bun
+  - 3333     # bun
+  - 3000     # node
+  - 2000     # asterisk
+  - 9100     # node-exporter (loopback only ideally)
+host_hardening_expected_udp:
+  - 80
+  - 443      # QUIC
+  - 3478
+  - 5349
+  - 51820    # wireguard
+  - 4433     # oxmux-agent QUIC
+  - 4789     # docker swarm vxlan (legacy?)
+  - 60000    # mosh range start (60000-61000 — listed as singleton; expand if needed)
+

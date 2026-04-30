@@ -1,0 +1,8 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: yes
+
+- name: Apply host-firewall
+  ansible.builtin.command: /usr/local/bin/host-firewall.sh
+  changed_when: true

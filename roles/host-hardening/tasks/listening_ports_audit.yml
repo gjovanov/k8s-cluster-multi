@@ -1,0 +1,32 @@
+---
+# Daily port allow-list audit. Compares actual `ss -tlnp` listeners against
+# `host_hardening_expected_listeners` (per-host list). Writes a Prometheus
+# textfile-collector metric so node-exporter exposes drift to Prometheus.
+
+- name: Install drift-audit script
+  ansible.builtin.template:
+    src: listening-ports-audit.sh.j2
+    dest: /usr/local/bin/listening-ports-audit.sh
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure node-exporter textfile dir exists
+  ansible.builtin.file:
+    path: /var/lib/node_exporter/textfile_collector
+    state: directory
+    mode: "0755"
+
+- name: Schedule daily port audit (cron)
+  ansible.builtin.cron:
+    name: listening-ports-audit
+    user: root
+    minute: "0"
+    hour: "5"
+    job: "/usr/local/bin/listening-ports-audit.sh > /var/log/listening-ports-audit.log 2>&1"
+
+- name: Run audit immediately
+  ansible.builtin.command: /usr/local/bin/listening-ports-audit.sh
+  register: lp_audit
+  changed_when: false
+  failed_when: false

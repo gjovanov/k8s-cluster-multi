@@ -1,0 +1,18 @@
+---
+# Phase 16: host-firewall + host-hardening on bare-metal hosts.
+#
+# Run after host-networking (phase 11) so coturn-iptables.service and
+# wg-fix-iptables.service are already in place. The host-firewall role's
+# HOST_FW_FORWARD chain layers on top of those rules without conflict.
+
+- name: Apply host-firewall (default-deny INPUT/FORWARD)
+  hosts: all_hosts
+  become: true
+  roles:
+    - role: host-firewall
+
+- name: Apply host-hardening (drift guard, sudoers, ssh, fail2ban, auditd, unattended-upgrades, sysctl)
+  hosts: all_hosts
+  become: true
+  roles:
+    - role: host-hardening

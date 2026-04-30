@@ -144,3 +144,20 @@ additionalPrometheusRulesMap:
               severity: warning
             annotations:
               summary: "Node {{ '{{' }} $labels.instance {{ '}}' }} disk above 85%"
+          # Drift alert: triggered by the daily port-allow-list audit run from
+          # roles/host-hardening/. The audit script writes a textfile metric
+          # (host_unexpected_listener) consumed by node-exporter; any non-zero
+          # sample means a process is listening on a port not declared in
+          # inventory/host_vars/<host>.yml host_hardening_expected_{tcp,udp}.
+          - alert: UnexpectedListenerOnNode
+            expr: max_over_time(host_unexpected_listener[10m]) > 0
+            for: 15m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Unexpected listener on {{ '{{' }} $labels.instance {{ '}}' }}"
+              description: |
+                Process {{ '{{' }} $labels.process {{ '}}' }} bound on {{ '{{' }} $labels.proto {{ '}}' }}:{{ '{{' }} $labels.port {{ '}}' }} is not in the
+                host_hardening allow-list. Either add it to
+                inventory/host_vars/<host>.yml `host_hardening_expected_{tcp,udp}`
+                or remove the service. Could indicate compromise.

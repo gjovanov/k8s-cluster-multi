@@ -1,0 +1,57 @@
+---
+# Default-deny INPUT/FORWARD on bare-metal hosts. Allow-list per host_firewall_*
+# variables in inventory/group_vars/all.yml. Coordinates with the existing
+# coturn-iptables.sh (PREROUTING DNAT) and libvirt's chains.
+#
+# Apply order (in playbooks/site.yml): AFTER host-bootstrap and host-setup,
+# BEFORE host-networking. This ensures the iptables policy DROP is set first,
+# and coturn-iptables.sh's PREROUTING DNAT runs after.
+
+- name: Ensure iptables-persistent is installed
+  ansible.builtin.apt:
+    name:
+      - iptables-persistent
+      - conntrack
+    state: present
+    update_cache: yes
+
+- name: Ensure /usr/local/bin is present (script home)
+  ansible.builtin.file:
+    path: /usr/local/bin
+    state: directory
+    mode: "0755"
+
+- name: Render host-firewall.sh from template
+  ansible.builtin.template:
+    src: host-firewall.sh.j2
+    dest: /usr/local/bin/host-firewall.sh
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Apply host-firewall
+
+- name: Install host-firewall.service unit
+  ansible.builtin.template:
+    src: host-firewall.service.j2
+    dest: /etc/systemd/system/host-firewall.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Apply host-firewall
+
+- name: Enable host-firewall.service (idempotent)
+  ansible.builtin.systemd:
+    name: host-firewall.service
+    enabled: yes
+    daemon_reload: yes
+
+- name: Apply firewall rules now (one-shot run)
+  ansible.builtin.command: /usr/local/bin/host-firewall.sh
+  register: hf_apply
+  changed_when: hf_apply.rc == 0
+
+- name: Persist iptables rules to /etc/iptables/rules.v4
+  ansible.builtin.shell: iptables-save > /etc/iptables/rules.v4
+  changed_when: true

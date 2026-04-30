@@ -154,3 +154,20 @@ kubectl: ## Run kubectl with kubeconfig
 grafana-tunnel: ## SSH tunnel to Grafana (http://localhost:3000)
 	@echo "Grafana available at http://localhost:3000"
 	ssh -L 3000:10.10.10.11:30300 -i $(SSH_DIR)/mars/k8s_ed25519 -N ubuntu@10.10.10.10
+
+# ============================================================
+# Phase 16: host-firewall + host-hardening
+# ============================================================
+phase16: ## Phase 16: default-deny INPUT/FORWARD + drift guards + ssh/sudoers/fail2ban/auditd/sysctl/unattended-upgrades
+	@echo "============================================================"
+	@echo "Phase 16: Host firewall + host hardening"
+	@echo "============================================================"
+	$(call ANSIBLE_PLAYBOOK,playbooks/16-host-hardening.yml)
+
+phase16-firewall-only: ## Phase 16 (only firewall — for piloting on jupiter first)
+	$(call ANSIBLE_PLAYBOOK,playbooks/16-host-hardening.yml --tags none --tags drift-guard) || true
+	$(call ANSIBLE_PLAYBOOK,playbooks/16-host-hardening.yml --tags none) || true
+	ansible-playbook -i inventory/hosts.yml playbooks/16-host-hardening.yml --limit jupiter --tags="-host-hardening"
+
+phase16-hardening-only: ## Phase 16 (only hardening — assumes firewall already applied)
+	$(call ANSIBLE_PLAYBOOK,playbooks/16-host-hardening.yml --tags drift-guard,audit,ssh,sudoers,sysctl,fail2ban,auditd,updates)

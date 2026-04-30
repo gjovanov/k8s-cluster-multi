@@ -1,0 +1,28 @@
+---
+# Sudoers tightening — replace NOPASSWD with PASSWD-required (or drop the rule
+# if the user is no longer admin). NOPASSWD remains for HOST_USER (deployer)
+# during ansible runs; standard human users get prompted.
+
+- name: Place ansible-managed sudoers drop-in (NOPASSWD only for deployer)
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/00-ansible-managed
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "/usr/sbin/visudo -cf %s"
+    content: |
+      # Managed by ansible — DO NOT EDIT.
+      # Only the dedicated deployer user (HOST_USER) gets passwordless sudo.
+      # Human users authenticated via SSH keys still type their password.
+      {{ host_user }} ALL=(ALL) NOPASSWD: ALL
+
+- name: Drop legacy NOPASSWD entries for human accounts (mars only)
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers
+    regexp: '^({{ item }})\s+ALL=\(ALL:?ALL?\)\s+NOPASSWD:'
+    state: absent
+    validate: "/usr/sbin/visudo -cf %s"
+  loop:
+    - alazarovski
+  when: inventory_hostname == 'mars'
+  failed_when: false

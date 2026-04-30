@@ -1,0 +1,30 @@
+---
+# SSH hardening — extend host-bootstrap's existing PermitRootLogin /
+# PasswordAuthentication settings.
+
+- name: Apply SSH hardening directives
+  ansible.builtin.blockinfile:
+    path: /etc/ssh/sshd_config.d/00-hardening.conf
+    create: yes
+    owner: root
+    group: root
+    mode: "0644"
+    block: |
+      # Managed by ansible (roles/host-hardening/tasks/ssh_hardening.yml).
+      # Hardens defaults; key-only auth is enforced by host-bootstrap's
+      # PasswordAuthentication=no.
+      MaxAuthTries 3
+      MaxSessions 4
+      ClientAliveInterval 300
+      ClientAliveCountMax 2
+      X11Forwarding no
+      AllowTcpForwarding local
+      GatewayPorts no
+      PermitTunnel no
+      PermitUserEnvironment no
+      AllowAgentForwarding no
+  notify: Restart sshd
+
+- name: Validate sshd config
+  ansible.builtin.command: sshd -t
+  changed_when: false

@@ -1,0 +1,31 @@
+---
+# Defense-in-depth hardening: drift guards (assert-no-ollama + listening-port
+# audit), sudoers tightening, SSH hardening, fail2ban, sysctl, auditd,
+# unattended-upgrades. Each module is idempotent and reversible.
+#
+# Applied AFTER host-firewall in playbooks/site.yml.
+
+- import_tasks: assert_no_ollama.yml
+  tags: [drift-guard, ollama]
+
+- import_tasks: listening_ports_audit.yml
+  tags: [drift-guard, audit]
+
+- import_tasks: ssh_hardening.yml
+  tags: [ssh]
+
+- import_tasks: sudoers.yml
+  tags: [sudoers]
+
+- import_tasks: sysctl.yml
+  tags: [sysctl]
+
+- import_tasks: fail2ban.yml
+  tags: [fail2ban]
+
+- import_tasks: auditd.yml
+  tags: [auditd]
+  when: not (host_hardening_skip_auditd | default(false))
+
+- import_tasks: unattended_upgrades.yml
+  tags: [updates]

@@ -1,0 +1,23 @@
+---
+# Jupiter (5.9.157.221) — host firewall allow-list.
+#
+# Jupiter hosts roomler-ai (with mediasoup RTC range 40000-49999) on worker-3.
+# Public-facing host services: SSH + WireGuard only.
+host_firewall_allowed_tcp:
+  - 3478
+  - 5349
+host_firewall_allowed_udp:
+  - 3478
+  - 5349
+  - 51820
+
+host_firewall_vm_subnet: "10.10.30.0/24"
+host_firewall_vm_dest_ip: "10.10.30.11"
+host_firewall_jupiter_extra: true
+
+host_hardening_expected_tcp:
+  - 22
+  - 9100       # node-exporter
+host_hardening_expected_udp:
+  - 51820
+

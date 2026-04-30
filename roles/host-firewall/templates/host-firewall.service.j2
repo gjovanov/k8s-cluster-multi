@@ -1,0 +1,14 @@
+[Unit]
+Description=Host-level iptables firewall (HOST_FW_* chains)
+After=network-pre.target
+Before=network.target docker.service libvirtd.service coturn-iptables.service
+Wants=network-pre.target
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/host-firewall.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

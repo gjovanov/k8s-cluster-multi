@@ -225,6 +225,25 @@ coturn_dnat_rules:
       - { dport: 443, tport: 5349 }
 
 # ============================================================
+# Host firewall — default-deny INPUT/FORWARD, per-host allow-list.
+# Coordinated with `coturn_dnat_rules` above (PREROUTING DNAT runs before
+# the FORWARD chain — the host-firewall role's HOST_FW_FORWARD chain decides
+# whether to ACCEPT or DROP the DNAT'd traffic).
+# ============================================================
+host_firewall_wg_peers:
+  - "{{ bare_metal_hosts.mars.public_ip }}"
+  - "{{ bare_metal_hosts.zeus.public_ip }}"
+  - "{{ bare_metal_hosts.jupiter.public_ip }}"
+
+host_firewall_wg_peer_subnets:
+  - "10.10.10.0/24"  # mars
+  - "10.10.20.0/24"  # zeus
+  - "10.10.30.0/24"  # jupiter
+
+# Per-host overrides applied via host_vars/{mars,zeus,jupiter}.yml
+# (see those files for host_firewall_allowed_tcp / _udp / _vm_subnet / _vm_dest_ip).
+
+# ============================================================
 # SNI Proxy (mars only)
 # ============================================================
 sni_proxy_hostname: "{{ lookup('env', 'SNI_PROXY_HOSTNAME') | default('coturn.example.com', true) }}"

@@ -1,0 +1,44 @@
+---
+# auditd — log root-shell invocations and writes to security-relevant paths.
+
+- name: Install auditd
+  ansible.builtin.apt:
+    name:
+      - auditd
+      - audispd-plugins
+    state: present
+    update_cache: yes
+
+- name: Drop ansible-managed audit rules
+  ansible.builtin.copy:
+    dest: /etc/audit/rules.d/00-host-hardening.rules
+    owner: root
+    group: root
+    mode: "0640"
+    content: |
+      # Managed by ansible — execve audit + sensitive file watches.
+
+      # Root-shell invocations
+      -a always,exit -F arch=b64 -S execve -F euid=0 -k root_exec
+      -a always,exit -F arch=b32 -S execve -F euid=0 -k root_exec
+
+      # Writes to systemd unit dirs and binary install paths
+      -w /etc/systemd/system/  -p wa -k systemd_unit_write
+      -w /usr/local/bin/       -p wa -k local_bin_write
+      -w /usr/local/sbin/      -p wa -k local_sbin_write
+      -w /usr/bin/             -p wa -k bin_write
+
+      # Writes to sudoers
+      -w /etc/sudoers          -p wa -k sudoers_write
+      -w /etc/sudoers.d/       -p wa -k sudoers_write
+
+      # SSH config changes
+      -w /etc/ssh/sshd_config  -p wa -k sshd_config_write
+      -w /etc/ssh/sshd_config.d -p wa -k sshd_config_write
+  notify: Restart auditd
+
+- name: Enable + start auditd
+  ansible.builtin.systemd:
+    name: auditd
+    enabled: yes
+    state: started

@@ -17,3 +17,4 @@
 - import_playbook: 12-host-kubectl.yml
 - import_playbook: 13-monitoring.yml
 - import_playbook: 14-verify.yml
+- import_playbook: 16-host-hardening.yml

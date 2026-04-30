@@ -1,0 +1,26 @@
+---
+# Zeus (5.9.157.226) — host firewall allow-list.
+#
+# Zeus runs no public-facing host services beyond SSH + WireGuard. All
+# user-facing traffic (lgr, tickytack, purestat, bauleiter, regal, lgr-mongo,
+# coturn-on-zeus) is served by VMs reached via libvirt+iptables DNAT.
+host_firewall_allowed_tcp:
+  - 3478
+  - 5349
+host_firewall_allowed_udp:
+  - 3478
+  - 5349
+  - 51820
+
+host_firewall_vm_subnet: "10.10.20.0/24"
+host_firewall_vm_dest_ip: "10.10.20.11"
+host_firewall_jupiter_extra: false
+
+host_hardening_expected_tcp:
+  - 22
+  - 4433       # legacy stray
+  - 9100       # node-exporter
+host_hardening_expected_udp:
+  - 51820
+  - 4433
+

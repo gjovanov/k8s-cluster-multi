@@ -1,0 +1,104 @@
+#!/bin/bash
+# Host-level firewall — default-deny INPUT/FORWARD with explicit allow-lists.
+# Idempotent: flushes the FILTER table baseline rules and re-adds, while leaving
+# the NAT table (COTURN_DNAT, DOCKER, libvirt) untouched.
+#
+# Generated from roles/host-firewall/templates/host-firewall.sh.j2 — DO NOT EDIT
+# directly. Edit the template and re-run `make phaseN` (or apply the ansible
+# role) to regenerate.
+
+set -e
+
+HF_INPUT_CHAIN="HOST_FW_INPUT"
+HF_FORWARD_CHAIN="HOST_FW_FORWARD"
+
+# ── 1. Create / flush our own chains so we never touch FILTER policy ──
+# The FILTER policy stays ACCEPT (so iptables-restore on boot doesn't lock
+# us out before our chains exist). Our chains do the actual filtering with
+# a final -j DROP at the end.
+for chain in "$HF_INPUT_CHAIN" "$HF_FORWARD_CHAIN"; do
+  iptables -N "$chain" 2>/dev/null || iptables -F "$chain"
+done
+
+# Hook our chains into INPUT and FORWARD as the FIRST rule
+iptables -C INPUT -j "$HF_INPUT_CHAIN" 2>/dev/null \
+  || iptables -I INPUT 1 -j "$HF_INPUT_CHAIN"
+iptables -C FORWARD -j "$HF_FORWARD_CHAIN" 2>/dev/null \
+  || iptables -I FORWARD 1 -j "$HF_FORWARD_CHAIN"
+
+# ── 2. INPUT chain: who can talk TO this host? ──
+
+# Always: loopback + already-established
+iptables -A "$HF_INPUT_CHAIN" -i lo -j ACCEPT
+iptables -A "$HF_INPUT_CHAIN" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -A "$HF_INPUT_CHAIN" -m conntrack --ctstate INVALID -j DROP
+
+# ICMP (ping, MTU discovery) rate-limited
+iptables -A "$HF_INPUT_CHAIN" -p icmp --icmp-type echo-request -m limit --limit 10/sec -j ACCEPT
+
+# SSH from anywhere (key-only — sshd_config enforces)
+iptables -A "$HF_INPUT_CHAIN" -p tcp --dport 22 -m conntrack --ctstate NEW -j ACCEPT
+
+# WireGuard mesh — only from peer hosts
+{% for peer in (host_firewall_wg_peers | default([])) %}
+iptables -A "$HF_INPUT_CHAIN" -p udp --dport 51820 -s {{ peer }} -j ACCEPT
+{% endfor %}
+
+# Per-host application allow-list (TCP)
+{% for port in (host_firewall_allowed_tcp | default([])) %}
+iptables -A "$HF_INPUT_CHAIN" -p tcp --dport {{ port }} -m conntrack --ctstate NEW -j ACCEPT
+{% endfor %}
+
+# Per-host application allow-list (UDP)
+{% for port in (host_firewall_allowed_udp | default([])) %}
+iptables -A "$HF_INPUT_CHAIN" -p udp --dport {{ port }} -j ACCEPT
+{% endfor %}
+
+# COTURN — TCP/UDP DNAT'd in PREROUTING; INPUT only sees DNAT'd traffic if
+# the destination matches localhost. Don't accept here; it gets forwarded.
+
+# Mosh (UDP 60000-61000) for survivable shells
+iptables -A "$HF_INPUT_CHAIN" -p udp --dport 60000:61000 -j ACCEPT
+
+# ── 3. INPUT default action: log + drop ──
+iptables -A "$HF_INPUT_CHAIN" -m limit --limit 5/min -j LOG --log-prefix "HFW-INPUT-DROP: " --log-level 7
+iptables -A "$HF_INPUT_CHAIN" -j DROP
+
+# ── 4. FORWARD chain: traffic transiting this host (libvirt VMs) ──
+
+# Always allow established/related (return paths)
+iptables -A "$HF_FORWARD_CHAIN" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -A "$HF_FORWARD_CHAIN" -m conntrack --ctstate INVALID -j DROP
+
+# COTURN: external → host_public_ip:{3478,5349,relay,443} → DNAT → VM
+{% set vm = (host_firewall_vm_subnet | default(None)) %}
+{% set dest = (host_firewall_vm_dest_ip | default(None)) %}
+{% if vm and dest %}
+{% for port in [3478, 5349] %}
+iptables -A "$HF_FORWARD_CHAIN" -d {{ dest }} -p tcp --dport {{ port }} -m conntrack --ctstate NEW -j ACCEPT
+iptables -A "$HF_FORWARD_CHAIN" -d {{ dest }} -p udp --dport {{ port }} -j ACCEPT
+{% endfor %}
+# Relay range
+iptables -A "$HF_FORWARD_CHAIN" -d {{ dest }} -p tcp --dport 10000:13000 -m conntrack --ctstate NEW -j ACCEPT
+iptables -A "$HF_FORWARD_CHAIN" -d {{ dest }} -p udp --dport 10000:13000 -j ACCEPT
+{% if (host_firewall_jupiter_extra | default(false)) %}
+# Jupiter only: mediasoup RTC range for roomler-ai
+iptables -A "$HF_FORWARD_CHAIN" -d {{ dest }} -p tcp --dport 40000:49999 -m conntrack --ctstate NEW -j ACCEPT
+iptables -A "$HF_FORWARD_CHAIN" -d {{ dest }} -p udp --dport 40000:49999 -j ACCEPT
+{% endif %}
+
+# Outbound from VMs (egress)
+iptables -A "$HF_FORWARD_CHAIN" -s {{ vm }} -j ACCEPT
+
+# Cross-host VM traffic via WireGuard mesh (peer subnets only)
+{% for peer_subnet in (host_firewall_wg_peer_subnets | default([])) %}
+iptables -A "$HF_FORWARD_CHAIN" -s {{ peer_subnet }} -d {{ vm }} -j ACCEPT
+iptables -A "$HF_FORWARD_CHAIN" -s {{ vm }} -d {{ peer_subnet }} -j ACCEPT
+{% endfor %}
+{% endif %}
+
+# ── 5. FORWARD default action: log + drop ──
+iptables -A "$HF_FORWARD_CHAIN" -m limit --limit 5/min -j LOG --log-prefix "HFW-FWD-DROP: " --log-level 7
+iptables -A "$HF_FORWARD_CHAIN" -j DROP
+
+echo "host-firewall applied for {{ inventory_hostname | default('this-host') }}"
