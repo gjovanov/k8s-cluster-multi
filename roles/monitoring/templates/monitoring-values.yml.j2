@@ -115,12 +115,21 @@ additionalPrometheusRulesMap:
       - name: nodes
         rules:
           - alert: NodeHighCPU
-            expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
-            for: 10m
+            # k8s-worker-2 (zeus) hosts the Ollama systemd service which is
+            # capped at 10/12 cores via CPUQuota=1000% but legitimately
+            # bursts to 90%+ during inference. Apply 95% threshold there;
+            # 85% everywhere else.
+            expr: |-
+              (100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+                and on(instance) (node_uname_info{nodename!="k8s-worker-2"}))
+              or
+              (100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+                and on(instance) (node_uname_info{nodename="k8s-worker-2"}))
+            for: 30m
             labels:
               severity: warning
             annotations:
-              summary: "Node {{ '{{' }} $labels.instance {{ '}}' }} CPU above 85%"
+              summary: "Node {{ '{{' }} $labels.instance {{ '}}' }} CPU above threshold for 30m"
           - alert: NodeHighMemory
             expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 90
             for: 5m
