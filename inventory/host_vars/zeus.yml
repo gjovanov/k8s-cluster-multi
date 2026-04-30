@@ -17,10 +17,16 @@ host_firewall_vm_dest_ip: "10.10.20.11"
 host_firewall_jupiter_extra: false
 
 host_hardening_expected_tcp:
-  - 22
-  - 4433       # legacy stray
-  - 9100       # node-exporter
+  - 22         # sshd
+  - 53         # libvirt dnsmasq + systemd-resolve (loopback only)
+  - 4433       # legacy oxmux-agent QUIC stray
+  - 8443       # haproxy K8s API LB (loopback only)
+  - 9100       # node-exporter (only via WG mesh)
 host_hardening_expected_udp:
-  - 51820
-  - 4433
+  - 53         # dnsmasq + systemd-resolve
+  - 67         # libvirt dnsmasq DHCP server for the VM subnet
+  - 4433       # legacy stray
+  - 51820      # WireGuard
+  # libvirt dnsmasq picks ephemeral high UDP ports for upstream queries; we
+  # do NOT allow-list ephemeral ranges. The drift alert tolerates short bursts.
 
