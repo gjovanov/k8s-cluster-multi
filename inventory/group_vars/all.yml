@@ -236,9 +236,10 @@ host_firewall_wg_peers:
   - "{{ bare_metal_hosts.jupiter.public_ip }}"
 
 host_firewall_wg_peer_subnets:
-  - "10.10.10.0/24"  # mars
-  - "10.10.20.0/24"  # zeus
-  - "10.10.30.0/24"  # jupiter
+  - "10.10.0.0/24"   # WG endpoint subnet (mars=10.10.0.1, zeus=10.10.0.2, jupiter=10.10.0.3) — outbound from a host's bare-metal nginx/turnserver crossing the WG mesh appears as source 10.10.0.X
+  - "10.10.10.0/24"  # mars VMs
+  - "10.10.20.0/24"  # zeus VMs
+  - "10.10.30.0/24"  # jupiter VMs
 
 # Per-host overrides applied via host_vars/{mars,zeus,jupiter}.yml
 # (see those files for host_firewall_allowed_tcp / _udp / _vm_subnet / _vm_dest_ip).

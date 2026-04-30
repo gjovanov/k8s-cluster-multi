@@ -16,8 +16,14 @@ host_firewall_vm_dest_ip: "10.10.30.11"
 host_firewall_jupiter_extra: true
 
 host_hardening_expected_tcp:
-  - 22
-  - 9100       # node-exporter
+  - 22         # sshd
+  - 53         # libvirt dnsmasq + systemd-resolve (loopback only)
+  - 8443       # haproxy K8s API LB (loopback only)
+  - 9100       # node-exporter (only via WG mesh)
 host_hardening_expected_udp:
-  - 51820
+  - 53         # dnsmasq + systemd-resolve
+  - 51820      # WireGuard
+  # libvirt dnsmasq picks an ephemeral high UDP port for upstream queries; we
+  # do NOT allow-list ephemeral ranges here — the drift alert will fire if it
+  # binds, but that's noise we accept for now.
 
