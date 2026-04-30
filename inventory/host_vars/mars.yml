@@ -31,7 +31,6 @@ host_hardening_expected_tcp:
   - 80       # nginx (host docker)
   - 443      # nginx (host docker)
   - 631      # cupsd (TODO: disable — not needed on a server)
-  - 2000     # asterisk SIP/IAX
   - 3000     # node
   - 3080     # bun
   - 3333     # bun
@@ -44,7 +43,6 @@ host_hardening_expected_tcp:
   - 8443     # haproxy K8s API LB (loopback only)
   - 9000     # docker-proxy (roomler-ai-minio-1)
   - 9001     # docker-proxy (roomler-ai-minio-1 console)
-  - 9088     # asterisk
   - 9100     # node-exporter (only via WG mesh)
   # Docker-proxy bindings still on 0.0.0.0 (firewall blocks externally; rebind 127.0.0.1 is cleanup):
   - 4001     # lgr-portal
@@ -61,14 +59,10 @@ host_hardening_expected_udp:
   - 67       # libvirt dnsmasq DHCP
   - 80
   - 443      # QUIC
-  - 2727     # asterisk
   - 3478
   - 4433     # oxmux-agent QUIC
-  - 4520     # asterisk
-  - 4569     # asterisk
-  - 5000     # asterisk
   - 5349
   - 51820    # wireguard
-  # ephemeral oxmux-agent + asterisk + dnsmasq UDP ports are NOT allow-listed
+  # ephemeral oxmux-agent + dnsmasq UDP ports are NOT allow-listed
   # (drift alert tolerates short bursts via the 15m persistence window).
 

@@ -5,7 +5,7 @@
 #
 # Applied AFTER host-firewall in playbooks/site.yml.
 
-- import_tasks: assert_no_ollama.yml
+- import_tasks: assert_no_banned.yml
   tags: [drift-guard, ollama]
 
 - import_tasks: listening_ports_audit.yml

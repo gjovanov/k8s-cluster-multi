@@ -1,0 +1,70 @@
+---
+# Drift guard: ensure banned services are not present. Re-running ansible
+# fails loudly if any of these are reinstalled.
+#
+# Currently banned (per docs/security-audit-2026-04-30.md):
+#   - Ollama (LLM inference server) — bound 0.0.0.0:11434 unauth
+#   - frps  (Fast Reverse Proxy server) — exposed dashboard with default creds
+#   - asterisk (PBX) — unmanaged, exposed many SIP/IAX/AMI ports
+
+- name: Assert no banned binaries / unit files / data dirs
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    # Ollama
+    - /usr/local/bin/ollama
+    - /usr/bin/ollama
+    - /usr/local/lib/ollama
+    - /usr/share/ollama
+    - /etc/systemd/system/ollama.service
+    - /etc/systemd/system/ollama.service.d
+    # frps
+    - /usr/bin/frps
+    - /usr/local/bin/frps
+    - /etc/frp
+    - /etc/systemd/system/frps.service
+    # asterisk
+    - /usr/sbin/asterisk
+    - /usr/bin/asterisk
+    - /etc/asterisk
+    - /etc/init.d/asterisk
+    - /usr/lib/asterisk
+    - /var/lib/asterisk
+    - /etc/systemd/system/asterisk.service
+  register: banned_paths
+
+- name: Fail if any banned path exists
+  ansible.builtin.fail:
+    msg: |
+      Banned artefact detected: {{ item.item }}
+      This service is intentionally removed from the cluster
+      (see docs/security-audit-2026-04-30.md). Either:
+        - remove the artefact, OR
+        - if it's now intended, remove from this drift guard and document
+          in the security-audit doc.
+  loop: "{{ banned_paths.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.stat.exists
+
+- name: Assert no banned process is running
+  ansible.builtin.shell: |
+    pgrep -af '[o]llama|[f]rps|[a]sterisk' || true
+  register: banned_proc
+  changed_when: false
+
+- name: Fail if any banned process detected
+  ansible.builtin.fail:
+    msg: "Banned process detected: {{ banned_proc.stdout }}"
+  when: banned_proc.stdout | length > 0
+
+- name: Assert no listener on banned ports (Ollama 11434, frps 1300/1500/1543/1580/7000/7001, asterisk SIP/IAX/AMI)
+  ansible.builtin.shell: |
+    ss -tlnp 2>/dev/null | awk 'NR>1 {print $4}' | grep -E ':(11434|1300|1500|1543|1580|7000|7001|2000|5060|5066|9088|1212)$' || true
+  register: banned_listener
+  changed_when: false
+
+- name: Fail if any banned port is listening
+  ansible.builtin.fail:
+    msg: "Listener on banned port detected: {{ banned_listener.stdout }}"
+  when: banned_listener.stdout | length > 0
