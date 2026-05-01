@@ -5,14 +5,21 @@
 # wg-fix-iptables.service are already in place. The host-firewall role's
 # HOST_FW_FORWARD chain layers on top of those rules without conflict.
 
-- name: Apply host-firewall (default-deny INPUT/FORWARD)
-  hosts: all_hosts
+# NOTE: host-firewall play is INTENTIONALLY tagged `never` after the
+# 2026-05-01 incident (see docs/security-audit-2026-04-30.md →
+# mars-firewall-incident.md). Re-enable only after the chain is fixed
+# to allow Cilium pod CIDR (10.244.0.0/16), service CIDR (10.96.0.0/12),
+# VXLAN UDP 8472, libvirt VMs UDP 53/67 to the host, and the docker
+# bridges. Until then this play must be opt-in via `--tags=host-firewall`.
+- name: Apply host-firewall (default-deny INPUT/FORWARD)  # DISABLED 2026-05-01
+  hosts: bare_metal
   become: true
+  tags: [never, host-firewall]
   roles:
     - role: host-firewall
 
 - name: Apply host-hardening (drift guard, sudoers, ssh, fail2ban, auditd, unattended-upgrades, sysctl)
-  hosts: all_hosts
+  hosts: bare_metal
   become: true
   roles:
     - role: host-hardening

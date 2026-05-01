@@ -11,8 +11,11 @@
       # Managed by ansible — see roles/host-hardening/tasks/sysctl.yml.
 
       # Network — anti-spoofing + ICMP redirects
-      net.ipv4.conf.all.rp_filter = 1
-      net.ipv4.conf.default.rp_filter = 1
+      # rp_filter=2 (loose) is required on this cluster — strict mode (1)
+      # broke libvirt+WireGuard asymmetric routing (see
+      # docs/security-audit-2026-04-30.md → mars-firewall-incident.md).
+      net.ipv4.conf.all.rp_filter = 2
+      net.ipv4.conf.default.rp_filter = 2
       net.ipv4.conf.all.accept_source_route = 0
       net.ipv4.conf.default.accept_source_route = 0
       net.ipv4.conf.all.accept_redirects = 0
