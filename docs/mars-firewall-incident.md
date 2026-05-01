@@ -100,3 +100,20 @@ When VMs couldn't resolve DNS, kubelet/containerd/Cilium retried but couldn't re
 - **`host-hardening` role still active** — the non-firewall parts (drift guard, audit, ssh, sudoers, sysctl with `rp_filter=2` instead of 1, fail2ban, auditd, unattended-upgrades).
 - **110.40.205.192 still blocked.**
 - **Ollama / frps / asterisk drift guard still active.**
+
+## Aftershock (2026-05-01 ~23:30 UTC) — kernel auto-reboot resurrected the bug
+
+A kernel security update auto-installed and rebooted mars (uptime "5 min", new kernel 5.15.0-176-generic, despite `Automatic-Reboot "false"` in unattended-upgrades — Ubuntu's default `50unattended-upgrades-security` overrides that). On boot, `netfilter-persistent` restored the `HOST_FW_INPUT` / `HOST_FW_FORWARD` chains from `/etc/iptables/rules.v4` even though `host-firewall.service` is `disabled` — the chains live in the persistent rules dump, the service only *applies* them.
+
+Result: mars VMs (master-1, worker-1) hung on DHCP forever — `virbr1` ingress had no allow-rule, so VM DHCP REQUEST → host dnsmasq was silently dropped (the chain ends in DROP). K8s nodes NotReady, `tickytack.app` / `roomler.live` / `argocd.roomler.ai` returned HTTP 000.
+
+**Diagnostic that nailed it:** sent a hand-crafted DHCP DISCOVER from the host's own kernel via `SO_BINDTODEVICE=virbr1` to `255.255.255.255:67` — dnsmasq was completely silent (TIMEOUT after 5 s). That confirmed it wasn't a dnsmasq bug or a libvirt config issue — it had to be the kernel netfilter path. Confirmed by inspecting `HOST_FW_INPUT`: the trailing `DROP` rule's counter was incrementing.
+
+**Fix:**
+1. **Live:** `sudo iptables -I HOST_FW_INPUT 1 -i virbr1 -j ACCEPT && sudo netfilter-persistent save` — VMs DHCPed within ~5 s, K8s recovered ~30 s later, sites returned 200.
+2. **Role:** added `iptables -A "$HF_INPUT_CHAIN" -i virbr1 -j ACCEPT` to `roles/host-firewall/templates/host-firewall.sh.j2` (parameterised via `host_firewall_libvirt_bridge`, default `virbr1`). When the role is re-enabled, this rule will be applied automatically.
+
+**New lessons:**
+- **`netfilter-persistent` snapshots survive role-disable.** Disabling `host-firewall.service` does NOT remove the persisted ruleset; the chains live in `/etc/iptables/rules.v4`. Either flush+save explicitly when disabling, or tag the role `never` AND clear the persisted dump. We did the former this time.
+- **The libvirt bridge needs an explicit ACCEPT rule** even though it's host-internal — VM→host DHCP/DNS hits the regular INPUT chain with `iif=virbr1`. Default-deny does not grandfather libvirt's own traffic.
+- **Diagnose the netfilter path with a manual probe.** When dnsmasq looked silent, sending a synthetic DHCP DISCOVER from a Python socket bound to virbr1 was decisive — it isolated "is the packet reaching the socket?" from "is the daemon broken?". Saved hours of `tcpdump` second-guessing.

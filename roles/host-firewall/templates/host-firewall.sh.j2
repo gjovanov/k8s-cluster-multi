@@ -33,6 +33,13 @@ iptables -A "$HF_INPUT_CHAIN" -i lo -j ACCEPT
 iptables -A "$HF_INPUT_CHAIN" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 iptables -A "$HF_INPUT_CHAIN" -m conntrack --ctstate INVALID -j DROP
 
+# Libvirt VM bridge — VMs must reach the host's dnsmasq (DHCP UDP 67, DNS 53)
+# and be reachable from the host. Without this rule, VMs hang on DHCP forever
+# (this caused the 2026-05-01 mars VM outage). The bridge is host-internal.
+{% if (host_firewall_libvirt_bridge | default('virbr1')) %}
+iptables -A "$HF_INPUT_CHAIN" -i {{ host_firewall_libvirt_bridge | default('virbr1') }} -j ACCEPT
+{% endif %}
+
 # ICMP (ping, MTU discovery) rate-limited
 iptables -A "$HF_INPUT_CHAIN" -p icmp --icmp-type echo-request -m limit --limit 10/sec -j ACCEPT
 
