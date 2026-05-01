@@ -30,7 +30,6 @@ host_hardening_expected_tcp:
   - 53       # dnsmasq + systemd-resolve (loopback only)
   - 80       # nginx (host docker)
   - 443      # nginx (host docker)
-  - 631      # cupsd (TODO: disable — not needed on a server)
   - 3000     # node
   - 3080     # bun
   - 3333     # bun
