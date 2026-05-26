@@ -177,7 +177,16 @@ coturn_workers:
   - name: coturn-worker-1
     node: k8s-worker-1
     node_ip: "10.10.10.11"
-    public_ip: "{{ bare_metal_hosts.mars.public_ip }}"
+    # Mars-only override: bare_metal_hosts.mars.public_ip is the
+    # primary 94.130.141.98 owned by the host nginx (port 443
+    # conflict). coturn.roomler.ai DNS publishes the secondary
+    # 94.130.141.74, and the iptables DNAT in coturn_dnat_rules
+    # routes that secondary to this pod. Coturn external-ip MUST
+    # match what clients dial (DNS) so relay candidates are
+    # reachable. Source-of-truth for the secondary IP lives in
+    # coturn_dnat_rules.mars.secondary_ip - referenced here to
+    # keep the two in lockstep.
+    public_ip: "{{ coturn_dnat_rules.mars.secondary_ip }}"
     host: mars
   - name: coturn-worker-2
     node: k8s-worker-2
