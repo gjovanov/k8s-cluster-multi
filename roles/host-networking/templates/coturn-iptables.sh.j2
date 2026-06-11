@@ -73,6 +73,17 @@ iptables -t nat -A "$OUTPUT_DNAT_CHAIN" -d "$SECONDARY_IP" -p {{ proto }} --dpor
 # Skip SNAT for internal cluster traffic (WireGuard mesh)
 iptables -t nat -A "$SNAT_CHAIN" -d 10.10.0.0/16 -j RETURN
 
+# Dual-IP fix (overlay/QUIC reliability): replies for connections that arrived
+# on the SECONDARY public IP must be SNAT'd back to the SECONDARY, not the
+# primary. The client allocated against the secondary (what coturn DNS
+# publishes) and drops return traffic coming from any other source IP, which
+# silently broke cross/same-worker relay on the dual-IP host. `--ctorigdst`
+# matches the pre-DNAT IP the client targeted; must precede the PRIMARY_IP
+# rules below (first match wins in the chain).
+{% if coturn_dnat_rules[host_name].secondary_ip is defined %}
+iptables -t nat -A "$SNAT_CHAIN" -s "$DEST_IP" -m conntrack --ctorigdst "$SECONDARY_IP" -j SNAT --to-source "$SECONDARY_IP"
+{% endif %}
+
 # SNAT for relay/RTC traffic (preserve source ports)
 {% for range in coturn_dnat_rules[host_name].port_ranges %}
 iptables -t nat -A "$SNAT_CHAIN" -s "$DEST_IP" -p udp --sport {{ range }} -j SNAT --to-source "$PUBLIC_IP"
