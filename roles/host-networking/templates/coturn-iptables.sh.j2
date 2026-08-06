@@ -21,6 +21,34 @@ iptables -D FORWARD -s $VM_SUBNET -j ACCEPT 2>/dev/null || true
 iptables -I FORWARD 1 -d $VM_SUBNET -j ACCEPT
 iptables -I FORWARD 2 -s $VM_SUBNET -j ACCEPT
 
+# --- TTL restoration (mangle PREROUTING - runs BEFORE the routing decision) ---
+# coturn emits its UDP replies with TTL=1. Harmless when the client is on the
+# same L2, but here EVERY reply must be FORWARDED by this bare-metal host out
+# to the internet, and forwarding decrements TTL 1 -> 0, so the kernel drops
+# the packet before it ever reaches the FORWARD chain.
+#
+# Symptom (diagnosed 2026-08-06): STUN/TURN over UDP was one-way. Requests were
+# DNAT'd into the VM and coturn answered, but no reply ever egressed. No overlay
+# node could gather a server-reflexive candidate, so srflx_endpoints was empty
+# fleet-wide, every pair read as "both UDP-blocked", and the whole mesh fell
+# back to the DERP carrier - its slowest tier. TCP was unaffected only because
+# HAProxy terminates :443/:5349 host-local and never traverses this path.
+#
+# mangle PREROUTING is the only hook early enough to save it: raw PREROUTING
+# sees the reply, the routing decision kills it, and FORWARD + nat POSTROUTING
+# never see it at all (verified with simultaneous per-hook LOG counters:
+# raw=3, mangle-FORWARD=0, filter-FORWARD=0, nat-POSTROUTING=0).
+TTL_CHAIN="COTURN_TTL"
+iptables -t mangle -N "$TTL_CHAIN" 2>/dev/null || iptables -t mangle -F "$TTL_CHAIN"
+iptables -t mangle -C PREROUTING -j "$TTL_CHAIN" 2>/dev/null || \
+  iptables -t mangle -I PREROUTING 1 -j "$TTL_CHAIN"
+{% for port in coturn_dnat_rules[host_name].ports %}
+iptables -t mangle -A "$TTL_CHAIN" -s "$DEST_IP" -p udp --sport {{ port }} -j TTL --ttl-set 64
+{% endfor %}
+{% for range in coturn_dnat_rules[host_name].port_ranges %}
+iptables -t mangle -A "$TTL_CHAIN" -s "$DEST_IP" -p udp --sport {{ range }} -j TTL --ttl-set 64
+{% endfor %}
+
 # Create/flush DNAT chain
 iptables -t nat -N "$DNAT_CHAIN" 2>/dev/null || iptables -t nat -F "$DNAT_CHAIN"
 iptables -t nat -C PREROUTING -j "$DNAT_CHAIN" 2>/dev/null || \
