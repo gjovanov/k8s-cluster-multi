@@ -83,17 +83,25 @@ iptables -t nat -A "$OUTPUT_DNAT_CHAIN" -d "$SECONDARY_IP" -p {{ proto }} --dpor
 {% endif %}
 {% endfor %}
 {% if coturn_dnat_rules[host_name].primary_redirects is defined %}
-# PRIMARY-IP port redirects (e.g. TURNS-over-:443 → coturn :5349)
+# PRIMARY-IP port redirects. A redirect with `proto` applies to that protocol
+# only (tcp :443 → TURNS :5349, udp :443 → plain TURN/STUN :3478 — the DTLS
+# listener on 5349 silently drops plain-UDP clients); without `proto` it
+# applies to every protocol in `protocols`.
 {% for redir in coturn_dnat_rules[host_name].primary_redirects %}
+{% if redir.proto is not defined or redir.proto == proto %}
 iptables -t nat -A "$DNAT_CHAIN" -d "$PUBLIC_IP" -p {{ proto }} --dport {{ redir.dport }} -j DNAT --to-destination "$DEST_IP":{{ redir.tport }}
 iptables -t nat -A "$OUTPUT_DNAT_CHAIN" -d "$PUBLIC_IP" -p {{ proto }} --dport {{ redir.dport }} -j DNAT --to-destination "$DEST_IP":{{ redir.tport }}
+{% endif %}
 {% endfor %}
 {% endif %}
 {% if coturn_dnat_rules[host_name].secondary_ip is defined and coturn_dnat_rules[host_name].secondary_redirects is defined %}
-# SECONDARY-IP port redirects (e.g. TURNS-over-:443 → coturn :5349)
+# SECONDARY-IP port redirects (same per-`proto` semantics as the primary
+# block above).
 {% for redir in coturn_dnat_rules[host_name].secondary_redirects %}
+{% if redir.proto is not defined or redir.proto == proto %}
 iptables -t nat -A "$DNAT_CHAIN" -d "$SECONDARY_IP" -p {{ proto }} --dport {{ redir.dport }} -j DNAT --to-destination "$DEST_IP":{{ redir.tport }}
 iptables -t nat -A "$OUTPUT_DNAT_CHAIN" -d "$SECONDARY_IP" -p {{ proto }} --dport {{ redir.dport }} -j DNAT --to-destination "$DEST_IP":{{ redir.tport }}
+{% endif %}
 {% endfor %}
 {% endif %}
 {% endfor %}
