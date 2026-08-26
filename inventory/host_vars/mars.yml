@@ -19,7 +19,7 @@ host_firewall_allowed_udp:
 # COTURN port range for mars (10000-13000)
 host_firewall_vm_subnet: "10.10.10.0/24"
 host_firewall_vm_dest_ip: "10.10.10.11"
-host_firewall_jupiter_extra: false
+host_firewall_mediasoup_rtc: false
 
 # host_hardening — list of ports legitimately listening on this host. The
 # daily `listening-ports-audit.sh` cron compares actual listeners against this

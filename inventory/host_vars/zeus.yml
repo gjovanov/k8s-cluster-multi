@@ -1,6 +1,8 @@
 ---
 # Zeus (5.9.157.226) — host firewall allow-list.
 #
+# Zeus hosts a roomler-ai pod (worker-2) since S6 — mediasoup RTC range
+# 40000-49999 must be forwarded (see coturn_dnat_rules + host_firewall_mediasoup_rtc).
 # Zeus runs no public-facing host services beyond SSH + WireGuard. All
 # user-facing traffic (lgr, tickytack, purestat, bauleiter, regal, lgr-mongo,
 # coturn-on-zeus) is served by VMs reached via libvirt+iptables DNAT.
@@ -14,7 +16,7 @@ host_firewall_allowed_udp:
 
 host_firewall_vm_subnet: "10.10.20.0/24"
 host_firewall_vm_dest_ip: "10.10.20.11"
-host_firewall_jupiter_extra: false
+host_firewall_mediasoup_rtc: true
 
 host_hardening_expected_tcp:
   - 22         # sshd

@@ -228,7 +228,7 @@ coturn_dnat_rules:
     vm_subnet: "10.10.20.0/24"
     protocols: [tcp, udp]
     ports: [3478, 5349]
-    port_ranges: ["10000:13000"]
+    port_ranges: ["10000:13000", "40000:49999"]  # COTURN relay + mediasoup RTC (worker-2 hosts a roomler-ai pod since S6 — omitting the RTC range here was the 2026-08-26 no-video incident)
     # Zeus has no nginx on :443; primary_ip can serve TURNS-over-:443 directly.
     primary_redirects:
       - { proto: tcp, dport: 443, tport: 5349 }

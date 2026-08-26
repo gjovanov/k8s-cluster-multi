@@ -88,8 +88,10 @@ iptables -A "$HF_FORWARD_CHAIN" -d {{ dest }} -p udp --dport {{ port }} -j ACCEP
 # Relay range
 iptables -A "$HF_FORWARD_CHAIN" -d {{ dest }} -p tcp --dport 10000:13000 -m conntrack --ctstate NEW -j ACCEPT
 iptables -A "$HF_FORWARD_CHAIN" -d {{ dest }} -p udp --dport 10000:13000 -j ACCEPT
-{% if (host_firewall_jupiter_extra | default(false)) %}
-# Jupiter only: mediasoup RTC range for roomler-ai
+{% if (host_firewall_mediasoup_rtc | default(false)) %}
+# Hosts a roomler-ai pod: mediasoup RTC range (browsers dial these ports on the
+# public IP directly; 2026-08-26 incident — this was modeled as jupiter-only
+# while S6 put a second pod on zeus)
 iptables -A "$HF_FORWARD_CHAIN" -d {{ dest }} -p tcp --dport 40000:49999 -m conntrack --ctstate NEW -j ACCEPT
 iptables -A "$HF_FORWARD_CHAIN" -d {{ dest }} -p udp --dport 40000:49999 -j ACCEPT
 {% endif %}
