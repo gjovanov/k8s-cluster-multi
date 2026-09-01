@@ -96,10 +96,25 @@
     mode: "0644"
     timeout: 7200
   when: vmtest_fetch_win11_iso | bool
-  # Microsoft rotates the eval CDN link between releases. On a 404: set
-  # VMTEST_WIN11_ISO_URL in .env to the current Evaluation Center link, or scp
-  # an ISO to {{ vmtest_dir }}/iso/win11-eval.iso (get_url skips an existing
-  # file) and set vmtest_fetch_win11_iso: false.
+  register: vmtest_win11_fetch
+  # NON-FATAL: Microsoft rotates this CDN link between releases, and the ISO is
+  # needed ONLY for the Win11 lane — the Ubuntu/ARM lanes (and the audit script
+  # below) must still provision. On failure the play continues with a loud
+  # note; supply the ISO out of band.
+  failed_when: false
+
+- name: Note a failed Win11 ISO fetch (Win11 lane only)
+  debug:
+    msg: >-
+      Win11 eval ISO fetch FAILED ({{ vmtest_win11_fetch.msg | default('see above') }}).
+      The Win11 lane will not bake until you either set VMTEST_WIN11_ISO_URL in
+      .env to a current Evaluation Center link and re-run, or place the ISO at
+      {{ vmtest_dir }}/iso/win11-eval.iso by hand (get_url skips an existing
+      file) and set vmtest_fetch_win11_iso=false. Ubuntu/ARM lanes are
+      unaffected.
+  when:
+    - vmtest_fetch_win11_iso | bool
+    - vmtest_win11_fetch is failed or (vmtest_win11_fetch.status_code | default(0)) >= 400
 
 - name: Install vmtest-audit (capacity preflight the orchestrator runs)
   template:
