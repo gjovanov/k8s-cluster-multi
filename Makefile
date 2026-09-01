@@ -102,6 +102,15 @@ phase13: ## Phase 13: Monitoring
 phase14: ## Phase 14: Verify
 	ansible-playbook $(PLAYBOOKS)/14-verify.yml
 
+vmtest-host: ## Phase 15 (opt-in): vmtest throwaway-VM capability on zeus + mars (FR-61)
+	ansible-playbook $(PLAYBOOKS)/15-vmtest.yml --limit zeus,mars
+
+vmtest-host-zeus: ## Phase 15 on zeus only
+	ansible-playbook $(PLAYBOOKS)/15-vmtest.yml --limit zeus
+
+vmtest-host-mars: ## Phase 15 on mars only
+	ansible-playbook $(PLAYBOOKS)/15-vmtest.yml --limit mars
+
 verify: ## Run verification script
 	bash $(SCRIPTS)/verify-cluster.sh
 

@@ -1,0 +1,17 @@
+<network>
+  <name>{{ vmtest_net_name }}</name>
+  <forward mode='nat'>
+    <nat>
+      <port start='1024' end='65535'/>
+    </nat>
+  </forward>
+  <bridge name='{{ vmtest_hosts[host_name].bridge }}' stp='on' delay='0'/>
+  <domain name='{{ vmtest_domain }}'/>
+  <ip address='{{ vmtest_hosts[host_name].gateway }}' netmask='255.255.255.0'>
+    <dhcp>
+      {# throwaway VMs get random MACs; the orchestrator reads the lease via
+         `virsh domifaddr`, so a plain pool is all this network needs #}
+      <range start='{{ vmtest_hosts[host_name].gateway | regex_replace("\\.\\d+$", ".") }}10' end='{{ vmtest_hosts[host_name].gateway | regex_replace("\\.\\d+$", ".") }}200'/>
+    </dhcp>
+  </ip>
+</network>

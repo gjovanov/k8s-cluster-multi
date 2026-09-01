@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# vmtest-audit — capacity preflight for the FR-61 throwaway install-test VMs.
+# Installed by roles/vmtest-host; run by roomler-ai-deploy/vmtest/vmtest.sh
+# before every lane, and by hand when deciding whether a k8s VM shrink is
+# actually needed (see roles/vmtest-host/README.md — the answer is usually no:
+# lanes run sequentially, one VM per host, <=8 GiB peak).
+#
+# Prints a report and exits non-zero when the host cannot take a VM of the
+# requested size right now. Usage: vmtest-audit [needed_mib] [needed_gb_disk]
+set -eu
+
+NEED_MIB="${1:-8192}"
+NEED_GB="${2:-40}"
+VMTEST_DIR="{{ vmtest_dir }}"
+
+echo "== vmtest-audit @ $(hostname) $(date -u +%FT%TZ) =="
+
+# RAM: MemAvailable is the honest number (page cache reclaims under pressure).
+avail_mib=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)
+total_mib=$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo)
+echo "ram: ${avail_mib} MiB available of ${total_mib} MiB"
+
+# What libvirt has committed (the k8s VMs + any leftover vmtest guests).
+echo "-- libvirt domains --"
+virsh list --all --name | sed '/^$/d' | while read -r dom; do
+  mem_kib=$(virsh dominfo "$dom" | awk '/Used memory/{print $3}')
+  state=$(virsh domstate "$dom")
+  printf '  %-24s %-10s %6d MiB\n' "$dom" "$state" "$((mem_kib / 1024))"
+done
+
+# Leftover vmtest guests are a bug in a previous run's teardown — name them.
+leftovers=$(virsh list --all --name | grep '^vmtest-' || true)
+if [ -n "$leftovers" ]; then
+  echo "WARN: leftover vmtest domains (a prior run did not clean up):"
+  echo "$leftovers" | sed 's/^/  /'
+fi
+
+free_gb=$(df -BG --output=avail "$VMTEST_DIR" 2>/dev/null | tail -1 | tr -dc '0-9')
+echo "disk: ${free_gb}G free on the filesystem holding ${VMTEST_DIR}"
+
+cores=$(nproc)
+load=$(cut -d' ' -f1 /proc/loadavg)
+echo "cpu: ${cores} cores, load ${load} (vCPUs are time-shared — RAM is the only hard commit)"
+
+fail=0
+if [ "$avail_mib" -lt "$NEED_MIB" ]; then
+  echo "FAIL: need ${NEED_MIB} MiB available RAM, have ${avail_mib} MiB."
+  echo "      Before shrinking any k8s VM, read roles/vmtest-host/README.md —"
+  echo "      sequential scheduling usually makes the shrink unnecessary."
+  fail=1
+fi
+if [ "$free_gb" -lt "$NEED_GB" ]; then
+  echo "FAIL: need ${NEED_GB}G free disk under ${VMTEST_DIR}, have ${free_gb}G."
+  fail=1
+fi
+[ "$fail" -eq 0 ] && echo "OK: host can take a ${NEED_MIB} MiB / ${NEED_GB}G guest."
+exit "$fail"

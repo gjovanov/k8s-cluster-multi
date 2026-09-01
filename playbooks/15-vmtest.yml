@@ -1,0 +1,21 @@
+---
+# Phase 15: vmtest host capability (FR-61, roomler-ai#1199) — OPT-IN.
+#
+# Deliberately NOT imported by site.yml: the throwaway install-test VMs are an
+# on-demand harness, not part of the cluster. Run explicitly:
+#
+#   make vmtest-host              # zeus + mars (the default placement)
+#   make vmtest-host-zeus         # one host
+#   ansible-playbook playbooks/15-vmtest.yml --limit jupiter   # windows only!
+#
+# jupiter hosts the prod storage node (mongodb/minio/roomler2 PVCs on
+# k8s-worker-3) — only provision/use it for vmtest in an announced window.
+#
+# This playbook creates NO VMs. Lifecycle (bake/run/destroy/report) is
+# roomler-ai-deploy/vmtest/vmtest.sh.
+
+- name: vmtest host capability (emulators, vmtest-net, storage, image cache, audit)
+  hosts: bare_metal
+  become: true
+  roles:
+    - role: vmtest-host

@@ -123,6 +123,48 @@ cloud_image_dir: "/var/lib/libvirt/images"
 vm_image_dir: "/var/lib/libvirt/images"
 
 # ============================================================
+# vmtest — throwaway install-test VMs (FR-61, roomler-ai#1199)
+# ============================================================
+# Host capability for the on-demand install & verify matrix. VM LIFECYCLE is
+# owned by roomler-ai-deploy/vmtest/vmtest.sh, NOT by ansible — nothing here
+# creates a VM. Deliberately a separate network + separate storage dir so the
+# k8s VMs (and the "never touch /var/lib/libvirt/images" rule) stay untouched.
+# vmtest VMs must NEVER be added to the `vms:` list above — vm-provision would
+# pick them up and phases 6-9 would try to make kubelets out of them.
+vmtest_net_name: "vmtest-net"
+vmtest_domain: "vmtest.local"
+vmtest_dir: "/var/lib/libvirt/vmtest"
+vmtest_hosts:
+  mars:
+    subnet: "10.10.110.0/24"
+    gateway: "10.10.110.1"
+    bridge: "virbr2"
+  zeus:
+    subnet: "10.10.120.0/24"
+    gateway: "10.10.120.1"
+    bridge: "virbr2"
+  jupiter:
+    subnet: "10.10.130.0/24"
+    gateway: "10.10.130.1"
+    bridge: "virbr2"
+# Golden-image source material cached by the role (fetch skipped when present).
+vmtest_noble_amd64_url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
+vmtest_noble_arm64_url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-arm64.img"
+vmtest_virtio_win_url: "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso"
+# Windows 11 Enterprise Evaluation (90-day) — the direct CDN link Microsoft
+# publishes behind the Evaluation Center form. Overridable via .env
+# (VMTEST_WIN11_ISO_URL) because Microsoft rotates it between releases; if the
+# fetch 404s, update the URL or place the ISO at
+# {{ vmtest_dir }}/iso/win11-eval.iso by hand and re-run.
+vmtest_win11_iso_url: "{{ lookup('env', 'VMTEST_WIN11_ISO_URL') | default('https://software-static.download.prss.microsoft.com/dbazure/888969d5-f34a-4e03-ac9d-1f9786c66749/26100.1742.240906-0331.ge_release_svc_refresh_CLIENTENTERPRISEEVAL_OEMRET_x64FRE_en-us.iso', true) }}"
+vmtest_fetch_win11_iso: true
+# Free disk (GiB) required on the filesystem holding vmtest_dir before the
+# role will proceed — golden images + overlays + two ISOs fit in well under
+# this; the margin protects the shared md2 root (mars filled / mid-deploy on
+# 2026-07-12).
+vmtest_min_free_gb: 80
+
+# ============================================================
 # Kubernetes
 # ============================================================
 k8s_version: "1.31"

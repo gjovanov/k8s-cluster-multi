@@ -1,0 +1,117 @@
+---
+# vmtest-host — host capability for the FR-61 throwaway install-test VMs
+# (roomler-ai#1199). Provides: emulators/firmware/TPM packages, the vmtest-net
+# NAT network on its own bridge, a dedicated storage dir, cached source
+# images, and /usr/local/bin/vmtest-audit (the capacity preflight the
+# orchestrator runs before every lane).
+#
+# This role creates NO VMs. Lifecycle is roomler-ai-deploy/vmtest/vmtest.sh.
+# Opt-in: playbooks/15-vmtest.yml is deliberately NOT imported by site.yml.
+
+- name: Preflight — free disk on the filesystem holding {{ vmtest_dir }}
+  shell: |
+    set -eu
+    mkdir -p {{ vmtest_dir }}
+    df -BG --output=avail {{ vmtest_dir }} | tail -1 | tr -dc '0-9'
+  register: vmtest_free_gb
+  changed_when: false
+
+- name: Preflight — refuse when below vmtest_min_free_gb
+  assert:
+    that: (vmtest_free_gb.stdout | int) >= (vmtest_min_free_gb | int)
+    fail_msg: >-
+      Only {{ vmtest_free_gb.stdout }}G free on the filesystem holding
+      {{ vmtest_dir }} — vmtest needs {{ vmtest_min_free_gb }}G. This is the
+      shared root (mars filled / mid-deploy on 2026-07-12): reclaim space
+      (docker system prune -af, registry-retention, stale target/ dirs) before
+      re-running. Do NOT delete anything under /var/lib/libvirt/images — those
+      are the live k8s VM disks.
+
+- name: Install emulator / firmware / TPM packages
+  apt:
+    name:
+      - qemu-system-arm # qemu-system-aarch64 — the ARM lane runs TCG on these x86 hosts
+      - qemu-efi-aarch64 # AAVMF UEFI firmware for the aarch64 guest
+      - ovmf # x86_64 UEFI firmware for the Win11 guest
+      - swtpm # Win11 wants a TPM; emulated beats registry bypasses
+      - swtpm-tools
+      - dosfstools # FAT image for the autounattend/config seed the Win11 lane attaches
+      - qemu-utils
+      - genisoimage
+    state: present
+    update_cache: true
+
+- name: Storage layout under {{ vmtest_dir }}
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ vmtest_dir }}"
+    - "{{ vmtest_dir }}/iso"
+    - "{{ vmtest_dir }}/base" # golden images (baked once, read-only backing files)
+    - "{{ vmtest_dir }}/run" # per-run COW overlays + seeds (vmtest.sh clean wipes this)
+
+- name: Template vmtest-net XML
+  template:
+    src: vmtest-net.xml.j2
+    dest: /tmp/vmtest-net.xml
+    mode: "0644"
+
+- name: Define + start vmtest-net
+  shell: |
+    set -eu
+    virsh net-info {{ vmtest_net_name }} >/dev/null 2>&1 || virsh net-define /tmp/vmtest-net.xml
+    virsh net-autostart {{ vmtest_net_name }} >/dev/null
+    virsh net-info {{ vmtest_net_name }} | grep -q 'Active:.*yes' || virsh net-start {{ vmtest_net_name }}
+    virsh net-info {{ vmtest_net_name }}
+  args:
+    executable: /bin/bash
+  register: vmtest_net_up
+  changed_when: false
+
+- name: Cache Ubuntu noble cloud images (amd64 + arm64)
+  get_url:
+    url: "{{ item.url }}"
+    dest: "{{ vmtest_dir }}/iso/{{ item.name }}"
+    mode: "0644"
+    timeout: 1200
+  loop:
+    - { url: "{{ vmtest_noble_amd64_url }}", name: "noble-server-cloudimg-amd64.img" }
+    - { url: "{{ vmtest_noble_arm64_url }}", name: "noble-server-cloudimg-arm64.img" }
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Cache virtio-win driver ISO
+  get_url:
+    url: "{{ vmtest_virtio_win_url }}"
+    dest: "{{ vmtest_dir }}/iso/virtio-win.iso"
+    mode: "0644"
+    timeout: 1200
+
+- name: Cache Windows 11 Enterprise Evaluation ISO (large — ~5-6 GB, once)
+  get_url:
+    url: "{{ vmtest_win11_iso_url }}"
+    dest: "{{ vmtest_dir }}/iso/win11-eval.iso"
+    mode: "0644"
+    timeout: 7200
+  when: vmtest_fetch_win11_iso | bool
+  # Microsoft rotates the eval CDN link between releases. On a 404: set
+  # VMTEST_WIN11_ISO_URL in .env to the current Evaluation Center link, or scp
+  # an ISO to {{ vmtest_dir }}/iso/win11-eval.iso (get_url skips an existing
+  # file) and set vmtest_fetch_win11_iso: false.
+
+- name: Install vmtest-audit (capacity preflight the orchestrator runs)
+  template:
+    src: vmtest-audit.sh.j2
+    dest: /usr/local/bin/vmtest-audit
+    mode: "0755"
+
+- name: Report
+  debug:
+    msg: >-
+      vmtest-host ready on {{ host_name }}:
+      net={{ vmtest_net_name }} ({{ vmtest_hosts[host_name].subnet }} on
+      {{ vmtest_hosts[host_name].bridge }}), dir={{ vmtest_dir }}
+      ({{ vmtest_free_gb.stdout }}G free). Run /usr/local/bin/vmtest-audit for
+      the live capacity picture.
