@@ -151,12 +151,13 @@ vmtest_hosts:
 vmtest_noble_amd64_url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
 vmtest_noble_arm64_url: "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-arm64.img"
 vmtest_virtio_win_url: "https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso"
-# Windows 11 Enterprise Evaluation (90-day) — the direct CDN link Microsoft
-# publishes behind the Evaluation Center form. Overridable via .env
-# (VMTEST_WIN11_ISO_URL) because Microsoft rotates it between releases; if the
-# fetch 404s, update the URL or place the ISO at
-# {{ vmtest_dir }}/iso/win11-eval.iso by hand and re-run.
-vmtest_win11_iso_url: "{{ lookup('env', 'VMTEST_WIN11_ISO_URL') | default('https://software-static.download.prss.microsoft.com/dbazure/888969d5-f34a-4e03-ac9d-1f9786c66749/26100.1742.240906-0331.ge_release_svc_refresh_CLIENTENTERPRISEEVAL_OEMRET_x64FRE_en-us.iso', true) }}"
+# Windows 11 Enterprise Evaluation (90-day). Use Microsoft's STABLE fwlink
+# redirect (get_url follows it) rather than the raw Azure blob, which rotates
+# every build — the fwlink resolves to the current 25H2 eval ISO. Overridable
+# via .env (VMTEST_WIN11_ISO_URL); if it ever breaks, grab a fresh link from
+# https://www.microsoft.com/evalcenter/download-windows-11-enterprise or place
+# the ISO at {{ vmtest_dir }}/iso/win11-eval.iso by hand.
+vmtest_win11_iso_url: "{{ lookup('env', 'VMTEST_WIN11_ISO_URL') | default('https://go.microsoft.com/fwlink/?linkid=2334167&clcid=0x409&culture=en-us&country=us', true) }}"
 vmtest_fetch_win11_iso: true
 # Free disk (GiB) required on the filesystem holding vmtest_dir before the
 # role will proceed — golden images + overlays + two ISOs fit in well under
