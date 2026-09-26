@@ -15,6 +15,12 @@ host_firewall_allowed_udp:
   - 3478         # TURN/STUN UDP
   - 5349         # DTLS / alt
   - 51820        # WireGuard (also matched by host_firewall_wg_peers)
+  # roomlerd overlay: the derived port band (43648-43903), its +256 public twin
+  # and the +512 fallback band. Mars serves no mediasoup, so nothing DNATs
+  # this band and roomlerd keeps its default port here. Allowed by hand on
+  # 2026-08-15 (as 43648:44200) but never recorded here, so re-rendering the
+  # firewall would have taken mars off direct paths (roomler-ai#1665).
+  - "43648:44415"
 
 # COTURN port range for mars (10000-13000)
 host_firewall_vm_subnet: "10.10.10.0/24"

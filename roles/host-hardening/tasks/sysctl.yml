@@ -40,4 +40,12 @@
       kernel.dmesg_restrict = 1
       kernel.unprivileged_bpf_disabled = 1
       kernel.yama.ptrace_scope = 1
+      {% if host_firewall_mediasoup_rtc | default(false) %}
+
+      # Hosts a roomler-ai pod: the mediasoup RTC range is DNAT'd from the public IP
+      # into the worker VM (coturn_dnat_rules), so the kernel must never hand a host
+      # process an ephemeral port inside it -- a peer's first packet to such a port
+      # would be rewritten into the VM (roomler-ai#1665).
+      net.ipv4.ip_local_reserved_ports = 40000-49999
+      {% endif %}
   notify: Reload sysctl

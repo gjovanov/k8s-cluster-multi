@@ -3,6 +3,13 @@
 #
 # Jupiter hosts roomler-ai (with mediasoup RTC range 40000-49999) on worker-3.
 # Public-facing host services: SSH + WireGuard only.
+#
+# roomlerd (the Roomler mesh node on this host) pins overlay_direct_port = 21640
+# in /etc/roomler/config.toml: its default port band (43648-44415) sits INSIDE
+# the RTC range DNAT'd to the VM, so a peer's first packet to it went into the VM
+# and the host fell off direct paths after every re-handshake (roomler-ai#1665).
+# The pinned footprint is 21640-22415 (base, +256 public twin, +512 fallback
+# band) — below the kernel's ephemeral range, clear of every DNAT here.
 host_firewall_allowed_tcp:
   - 3478
   - 5349
@@ -10,6 +17,7 @@ host_firewall_allowed_udp:
   - 3478
   - 5349
   - 51820
+  - "21640:22415"  # roomlerd overlay (pinned; see header, roomler-ai#1665)
 
 host_firewall_vm_subnet: "10.10.30.0/24"
 host_firewall_vm_dest_ip: "10.10.30.11"
@@ -24,6 +32,8 @@ host_hardening_expected_udp:
   - 53         # dnsmasq + systemd-resolve
   - 67         # libvirt dnsmasq DHCP server for the VM subnet (loopback / virbr1 only)
   - 51820      # WireGuard
+  - 21640      # roomlerd overlay direct port (pinned, roomler-ai#1665)
+  - 21896      # roomlerd overlay public-dial twin (21640 + 256)
   # libvirt dnsmasq picks an ephemeral high UDP port for upstream queries; we
   # do NOT allow-list ephemeral ranges here — the drift alert will fire if it
   # binds, but that's noise we accept for now.
