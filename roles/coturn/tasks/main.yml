@@ -1,4 +1,17 @@
 ---
+- name: Refuse to deploy the DERP relay sidecar without its ticket key
+  ansible.builtin.assert:
+    that:
+      - coturn_derp_ticket_public_key | length == 44
+    fail_msg: >-
+      COTURN_DERP_TICKET_PUBLIC_KEY must be set in .env (base64 of a raw 32-byte
+      Ed25519 public key, 44 chars). derp-relay exits at startup without it, so
+      the coturn pods never turn Ready. The running value:
+      kubectl -n coturn get deploy coturn-worker-1
+      -o jsonpath='{.spec.template.spec.containers[?(@.name=="stats")].env[?(@.name=="DERP_TICKET_PUBLIC_KEY")].value}'
+    quiet: true
+  run_once: true
+
 - name: Create coturn namespace
   ansible.builtin.command:
     cmd: kubectl create namespace {{ coturn_namespace }}

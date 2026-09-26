@@ -224,6 +224,25 @@ coturn_namespace: "coturn"
 coturn_tls_cert: "{{ lookup('env', 'COTURN_TLS_CERT') | default(home_dir + '/cert/example.com.fullchain.pem', true) }}"
 coturn_tls_key: "{{ lookup('env', 'COTURN_TLS_KEY') | default(home_dir + '/cert/example.com.key.pem', true) }}"
 
+# DERP relay sidecar in every coturn pod: the eu-central relay of the Roomler
+# WireGuard overlay (roomler-ai `crates/derp-relay`), on the same host network
+# as TURN. It was added by `kubectl patch` on 2026-08-06 and is declared here
+# exactly as it runs — hence the container name `stats`, after the `…-stats-…`
+# build it came from. A pod that cannot pull it still runs TURN (kubelet starts
+# each container on its own) but loses DERP and never turns Ready. It lives in
+# the roomler-ai APP repo of the registry, whose retention keeps only the newest
+# build; the 2026-09-20 run
+# deleted this tag from under the running pods (restored 2026-09-26 — see
+# roles/registry-retention). Resolves to
+# sha256:3a46f328c0e88ea3f51ef86ad356be403bc2cc69ca36dfd783bf551d954bda42.
+coturn_derp_relay_image: "registry.roomler.ai/roomler-ai:v20260806-stats-439fa20bd750"
+coturn_derp_port: 9645
+coturn_derp_region: "eu-central"
+# The Ed25519 PUBLIC key relay tickets are verified with (a relay can forge
+# nothing). In .env like the other per-deployment values; roles/coturn refuses
+# to apply without it, because derp-relay exits at startup on an empty key.
+coturn_derp_ticket_public_key: "{{ lookup('env', 'COTURN_DERP_TICKET_PUBLIC_KEY') }}"
+
 coturn_workers:
   - name: coturn-worker-1
     node: k8s-worker-1

@@ -28,6 +28,34 @@ spec:
         - operator: Exists
           effect: NoSchedule
       containers:
+        # DERP relay (see coturn_derp_relay_image). FIRST, because that is how
+        # it runs: `kubectl apply` puts containers in this file's order, and any
+        # change to this pod template restarts TURN and DERP on the node
+        # (strategy Recreate). The name `stats` stays for the same reason.
+        - name: stats
+          image: {{ coturn_derp_relay_image }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - /usr/local/bin/derp-relay
+          env:
+            - name: NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: DERP_BIND
+              value: "$(NODE_IP):{{ coturn_derp_port }}"
+            - name: REGION
+              value: "{{ coturn_derp_region }}"
+            - name: DERP_TICKET_PUBLIC_KEY
+              value: "{{ coturn_derp_ticket_public_key }}"
+            - name: RUST_LOG
+              value: info
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
         - name: coturn
           image: {{ coturn_image }}
           args:
