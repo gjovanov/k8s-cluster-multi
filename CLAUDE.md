@@ -59,6 +59,10 @@ Diagnostic that nailed the 2026-05-01 outage: synthetic DHCP DISCOVER from a Pyt
 - `files/suspicious-sweep.sh` — ad-hoc audit script for all 9 nodes (banned-keyword scan)
 - `~/.claude/skills/security-audit/SKILL.md` — incident-response skill (7 phases)
 
+## Registry retention (registry.roomler.ai)
+
+`roles/registry-retention` (phase 17, `make registry-retention`, opt-in) installs a weekly job on mars that keeps `latest` + the newest tag of every repo and garbage-collects the rest. Retention is per repo and knows nothing about who deploys what — coturn's DERP sidecar lives in the `roomler-ai` app repo. So the script never deletes an image the cluster references (any pod or workload template, by tag or digest), and **skips the garbage-collect while any referenced image is missing**: until a GC runs, a deleted image's layers are still on disk, and the tag comes back byte-identical by re-pushing its manifest from a node that has it cached (`sudo ctr -n k8s.io content get <manifest digest>` on the worker → `PUT /v2/<repo>/manifests/<tag>`). That is how `lgr-qa`'s image and coturn's DERP image were restored on 2026-09-25/26, after the 2026-09-20 run had deleted both from under running pods. Preview a run with `DRY_RUN=1 ~/.local/bin/registry-retention.sh 1`.
+
 ## Commit etiquette
 
 This repo is **public** (`github.com/gjovanov/k8s-cluster-multi`). When committing:

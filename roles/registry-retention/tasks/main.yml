@@ -1,0 +1,32 @@
+---
+# Weekly retention for the self-hosted registry (`roomler-registry` on mars).
+# Before 2026-09-26 the script lived only in ~/.local/bin, scheduled by a
+# hand-added crontab line. `ansible.builtin.cron` adopts such a line (adds its
+# `#Ansible:` marker) only when the WHOLE line equals the one below — true with
+# the defaults. Change the schedule or the keep count in the same run that first
+# meets a hand-added line and it adds a second entry instead: two concurrent
+# runs racing each other's deletes and garbage-collect.
+- name: Ensure ~/.local/bin exists
+  ansible.builtin.file:
+    path: "{{ home_dir }}/.local/bin"
+    state: directory
+    owner: "{{ host_user }}"
+    group: "{{ host_user }}"
+    mode: "0755"
+
+- name: Install registry-retention.sh
+  ansible.builtin.copy:
+    src: registry-retention.sh
+    dest: "{{ home_dir }}/.local/bin/registry-retention.sh"
+    owner: "{{ host_user }}"
+    group: "{{ host_user }}"
+    mode: "0755"
+
+- name: Schedule the weekly run
+  ansible.builtin.cron:
+    name: registry-retention
+    user: "{{ host_user }}"
+    weekday: "{{ registry_retention_weekday }}"
+    hour: "{{ registry_retention_hour }}"
+    minute: "{{ registry_retention_minute }}"
+    job: "$HOME/.local/bin/registry-retention.sh {{ registry_retention_keep }} >> $HOME/registry-retention.log 2>&1"

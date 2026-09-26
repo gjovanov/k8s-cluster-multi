@@ -1,0 +1,8 @@
+---
+# Newest tags kept per repo, besides `latest` and anything the cluster runs
+# (the script keeps those whatever their age). At 1, a Sunday leaves prod with
+# nothing to roll back to but the release it is already running.
+registry_retention_keep: 1
+registry_retention_weekday: "0"   # Sunday
+registry_retention_hour: "4"
+registry_retention_minute: "0"

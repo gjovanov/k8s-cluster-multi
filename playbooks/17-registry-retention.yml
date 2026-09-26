@@ -1,0 +1,18 @@
+---
+# Phase 17: registry retention on mars — OPT-IN.
+#
+# The registry itself (`roomler-registry`, registry:2 behind the host nginx) is
+# hand-run on mars and not provisioned by this repo, so site.yml does not import
+# this phase either. Run explicitly:
+#
+#   make registry-retention
+#
+# What the next run would delete (no DELETE, no garbage-collect, no restart):
+#
+#   DRY_RUN=1 ~/.local/bin/registry-retention.sh 1
+
+- name: Registry retention (weekly prune of registry.roomler.ai)
+  hosts: mars
+  become: true
+  roles:
+    - role: registry-retention

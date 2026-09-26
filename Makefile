@@ -111,6 +111,9 @@ vmtest-host-zeus: ## Phase 15 on zeus only
 vmtest-host-mars: ## Phase 15 on mars only
 	ansible-playbook $(PLAYBOOKS)/15-vmtest.yml --limit mars
 
+registry-retention: ## Phase 17 (opt-in): weekly registry.roomler.ai retention job on mars
+	ansible-playbook $(PLAYBOOKS)/17-registry-retention.yml
+
 verify: ## Run verification script
 	bash $(SCRIPTS)/verify-cluster.sh
 
