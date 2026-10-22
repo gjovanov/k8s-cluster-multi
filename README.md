@@ -33,7 +33,7 @@ k8s-worker-3   Ready    worker          v1.31.14   10.10.30.11    jupiter
 | WireGuard | kernel module | Full mesh, port 51820 |
 | Helm | 3.20.0 | Installed on all VMs |
 | kube-prometheus-stack | Chart v65.1.0 | Prometheus + Grafana + AlertManager |
-| COTURN | latest | Let's Encrypt TLS (EC key) |
+| COTURN | 4.18.0, pinned by digest | Let's Encrypt TLS (EC key); statistics to the cluster Redis (`redis-statsdb`) |
 | Ansible | 2.17.14 | ansible-core on control node (mars) |
 
 ### Total Resources
