@@ -23,3 +23,12 @@ data:
     no-cli
     no-tlsv1
     no-tlsv1_1
+{# `prometheus`: the DERP sidecar's /stats scrapes coturn's exporter on
+   127.0.0.1:9641 (roomler-ai crates/derp-relay/src/main.rs). It was added to
+   the live ConfigMaps by `kubectl patch` on 2026-08-06 and never reached this
+   template, so applying it as it stood until 2026-10-22 would have
+   removed it. #}
+    prometheus
+{% if coturn_redis_statsdb | default('') %}
+    redis-statsdb="{{ coturn_redis_statsdb }}"
+{% endif %}
