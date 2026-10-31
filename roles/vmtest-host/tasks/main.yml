@@ -51,6 +51,7 @@
     - "{{ vmtest_dir }}/iso"
     - "{{ vmtest_dir }}/base" # golden images (baked once, read-only backing files)
     - "{{ vmtest_dir }}/run" # per-run COW overlays + seeds (vmtest.sh clean wipes this)
+    - "{{ vmtest_dir }}/reserved.d" # room a lane holds for a guest that boots late (vmtest-audit)
 
 - name: Template vmtest-net XML
   template:
