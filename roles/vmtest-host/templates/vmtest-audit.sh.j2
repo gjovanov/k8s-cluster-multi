@@ -20,7 +20,8 @@ NEED_MIB="${1:-8192}"
 NEED_GB="${2:-40}"
 VMTEST_DIR="{{ vmtest_dir }}"
 # What the host keeps for itself: the kernel, libvirtd, qemu's overhead per VM.
-HOST_RESERVE_MIB="${VMTEST_HOST_RESERVE_MIB:-6144}"
+# 9540 MiB puts zeus's budget at 116 GiB: its two k8s VMs plus 12 GiB of guests.
+HOST_RESERVE_MIB="${VMTEST_HOST_RESERVE_MIB:-9540}"
 
 echo "== vmtest-audit @ $(hostname) $(date -u +%FT%TZ) =="
 
@@ -43,8 +44,16 @@ while read -r dom; do
   mem_kib=$(virsh dominfo "$dom" | awk '/Used memory/{print $3}')
   committed_mib=$((committed_mib + mem_kib / 1024))
 done < <(virsh list --name | sed '/^$/d')
+# A lane whose second guest boots late holds its room here: one file per lane,
+# holding MiB, removed by the lane. A file older than 12 h is a crashed lane's.
+reserved_mib=0
+while read -r f; do
+  r=$(tr -dc '0-9' < "$f")
+  reserved_mib=$((reserved_mib + ${r:-0}))
+done < <(find "$VMTEST_DIR/reserved.d" -maxdepth 1 -type f -mmin -720 2>/dev/null)
+committed_mib=$((committed_mib + reserved_mib))
 budget_mib=$((total_mib - HOST_RESERVE_MIB))
-echo "committed: ${committed_mib} MiB to running guests, +${NEED_MIB} MiB for this one, budget ${budget_mib} MiB (${total_mib} MiB less a ${HOST_RESERVE_MIB} MiB reserve)"
+echo "committed: ${committed_mib} MiB to running guests and ${reserved_mib} MiB of that reserved, +${NEED_MIB} MiB for this one, budget ${budget_mib} MiB (${total_mib} MiB less a ${HOST_RESERVE_MIB} MiB reserve)"
 
 # Leftover vmtest guests are a bug in a previous run's teardown — name them.
 leftovers=$(virsh list --all --name | grep '^vmtest-' || true)

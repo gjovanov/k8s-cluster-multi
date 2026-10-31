@@ -32,13 +32,18 @@ on DHCP — the 2026-05-01 foot-gun.
   vCPUs are time-shared on KVM — only RAM is a hard commitment — so with
   sequential scheduling the k8s VMs should never need shrinking.
 - **Count what is allocated, not what is free.** `vmtest-audit` refuses a guest
-  unless every running guest at full size, plus the new one, plus a 6 GiB host
-  reserve (`VMTEST_HOST_RESERVE_MIB`), fits in the host's RAM. On zeus that
-  leaves about 15 GiB for test guests in total. On 2026-10-31 at 21:34:41Z the
-  kernel OOM-killed k8s-worker-2's qemu (97 GiB resident) and a production pod
-  was down until 21:50Z: guests were allocated well past the host's RAM, and the
-  old check passed because it read only `MemAvailable`. A kit that boots its own
-  guest instead of going through `vmtest.sh` must run `vmtest-audit` first.
+  unless every running guest at full size, plus the new one, plus a host reserve
+  of about 9.3 GiB (`VMTEST_HOST_RESERVE_MIB`), fits in the host's RAM. On zeus
+  that leaves 12 GiB for test guests in total, so profiletest's 14 GiB guest
+  needs a shrink first. On 2026-10-31 at 21:34:41Z the kernel OOM-killed
+  k8s-worker-2's qemu (97 GiB resident) and a production pod was down until
+  21:50Z: guests were allocated well past the host's RAM, and the old check
+  passed because it read only `MemAvailable`. A kit that boots its own guest
+  instead of going through `vmtest.sh` must run `vmtest-audit` first.
+- **A lane whose second guest boots late reserves it.** Put the MiB in a file
+  under `/var/lib/libvirt/vmtest/reserved.d/<lane>` and remove it when the lane ends,
+  so another session's audit doesn't read that room as spare. A file older than
+  12 hours is treated as a crashed lane's and ignored.
 
 ## Shrink runbook (only on a measured shortfall)
 
