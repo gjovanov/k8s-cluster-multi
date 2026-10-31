@@ -31,6 +31,14 @@ on DHCP — the 2026-05-01 foot-gun.
 - **Sequential by default**: one guest per host at a time, ≤ 8 GiB / 4 vCPU.
   vCPUs are time-shared on KVM — only RAM is a hard commitment — so with
   sequential scheduling the k8s VMs should never need shrinking.
+- **Count what is allocated, not what is free.** `vmtest-audit` refuses a guest
+  unless every running guest at full size, plus the new one, plus a 6 GiB host
+  reserve (`VMTEST_HOST_RESERVE_MIB`), fits in the host's RAM. On zeus that
+  leaves about 15 GiB for test guests in total. On 2026-10-31 at 21:34:41Z the
+  kernel OOM-killed k8s-worker-2's qemu (97 GiB resident) and a production pod
+  was down until 21:50Z: guests were allocated well past the host's RAM, and the
+  old check passed because it read only `MemAvailable`. A kit that boots its own
+  guest instead of going through `vmtest.sh` must run `vmtest-audit` first.
 
 ## Shrink runbook (only on a measured shortfall)
 
