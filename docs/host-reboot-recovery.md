@@ -93,3 +93,21 @@ ssh ubuntu@<vm-ip> "sudo systemctl restart kubelet"
 # 7. Restart HAProxy on mars (if mars was rebooted)
 sudo systemctl restart haproxy
 ```
+
+## A VM that crashed is not a reboot
+
+Nothing above runs when one VM dies and its host stays up. `Autostart` only fires
+when libvirtd starts, so a VM the kernel killed stays `shut off (crashed)` until
+someone starts it. That is how k8s-worker-2 stayed down for 17 minutes on 2026-10-31.
+
+```bash
+sudo virsh domstate k8s-worker-2 --reason     # on the host
+sudo virsh start k8s-worker-2
+```
+
+The node is Ready about 90 s later. MongoDB replays its journal after the unclean
+shutdown, and an app that starts before its database may sit in CrashLoopBackOff for
+a few minutes and clear by itself. While the node is down `kubectl get pods` still
+shows its pods as `Terminating`, some with `READY 1/1`: look at `kubectl get nodes`
+first. Why it happened, and what now stops it, is in
+`roles/vmtest-host/README.md` ("Memory limits").

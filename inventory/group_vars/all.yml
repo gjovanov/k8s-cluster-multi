@@ -86,7 +86,9 @@ vms:
     mac: "52:54:00:0a:02:11"
     host: zeus
     vcpu: 12
-    memory: 98304
+    # 96 GiB until 2026-10-31: the guest's page cache filled it, the host could not take that back,
+    # and its kernel OOM-killed this VM. 64 GiB holds every pod on workers 2 and 3 at its limit.
+    memory: 65536
     disk_gb: 200
     role: worker
     tags:
@@ -143,6 +145,9 @@ vmtest_hosts:
     subnet: "10.10.120.0/24"
     gateway: "10.10.120.1"
     bridge: "virbr2"
+    # What all VMs together may be allocated. Set = the role installs the memory guard here.
+    # 116 GiB of 125: the k8s VMs' 72 + 44 for test guests, 9 left to the host.
+    ram_ceiling_mib: 118784
   jupiter:
     subnet: "10.10.130.0/24"
     gateway: "10.10.130.1"
