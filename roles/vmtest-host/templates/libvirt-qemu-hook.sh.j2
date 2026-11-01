@@ -75,11 +75,9 @@ case "$op/$sub" in
     exit 0
     ;;
   release/end)
-    if ! is_k8s "$guest"; then
-      mkdir -p "$HOLD_DIR" 2>/dev/null
-      want=$(kib memory /dev/stdin)
-      [ -n "$want" ] && echo "$want" >"$HOLD_DIR/$guest" 2>/dev/null
-    fi
+    # Refreshes the hold `prepare` gave, and must never make one: libvirt fires this after a REFUSED
+    # start too, and a hold made here would keep room for that guest and let it in on its next try.
+    [ -f "$HOLD_DIR/$guest" ] && touch "$HOLD_DIR/$guest"
     exit 0
     ;;
   prepare/begin)

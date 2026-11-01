@@ -205,9 +205,29 @@ echo "<domain/>" >"$work/run/odd.xml"
 run a prepare begin 1
 ok "a running guest that cannot be sized refuses the next one" rc_is 1
 
-# ── Restarting a guest ────────────────────────────────────────────────────────────────────────
+# ── A refused start ───────────────────────────────────────────────────────────────────────────
+# Found on zeus, not here: libvirt fires `release end` after a refused `prepare` too. When that made
+# a hold, a refused guest kept room it never used and got in on its second try.
 reset
-run lane release end 14
+xml 45 >"$work/etc/big.xml"
+run big prepare begin 45
+ok "a guest past the allowance is refused" rc_is 1
+run big release end 45
+ok "the release libvirt fires after it makes no hold" not_held big
+run big prepare begin 45
+ok "so trying again is refused again" rc_is 1
+run big release end 45
+run small prepare begin 44
+ok "and a refused guest keeps no room" rc_is 0
+
+# ── Restarting a guest ────────────────────────────────────────────────────────────────────────
+stopped() { # <guest> <memory GiB>: it passed the check, ran, and stopped
+  run "$1" prepare begin "$2"
+  run "$1" release end "$2"
+}
+
+reset
+stopped lane 14
 xml 14 >"$work/etc/lane.xml"
 ok "a stopped guest keeps a hold" is_held lane
 xml 44 >"$work/run/other.xml"
@@ -215,7 +235,16 @@ run lane prepare begin 14
 ok "it restarts even with the room gone" rc_is 0
 
 reset
+run lane prepare begin 14
+xml 14 >"$work/etc/lane.xml"
+touch -d '3 hours ago' "$work/holds/lane"
 run lane release end 14
+xml 44 >"$work/run/other.xml"
+run lane prepare begin 14
+ok "the 30 minutes run from the stop, however long it ran" rc_is 0
+
+reset
+stopped lane 14
 xml 14 >"$work/etc/lane.xml"
 run other prepare begin 31
 ok "others cannot take the room it holds" rc_is 1
@@ -223,7 +252,7 @@ run other prepare begin 30
 ok "and can take the rest" rc_is 0
 
 reset
-run lane release end 14
+stopped lane 14
 xml 14 >"$work/etc/lane.xml"
 touch -d '31 minutes ago' "$work/holds/lane"
 run other prepare begin 44
@@ -234,13 +263,13 @@ run lane prepare begin 44
 ok "a guest past its hold goes through the check again" rc_is 1
 
 reset
-run lane release end 14
+stopped lane 14
 touch -d '5 minutes ago' "$work/holds/lane"
 run other prepare begin 44
 ok "a torn down guest (no definition) frees its room" rc_is 0
 
 reset
-run lane release end 14
+stopped lane 14
 run other prepare begin 44
 ok "a hold with no definition yet counts for two minutes (virt-install)" rc_is 1
 
