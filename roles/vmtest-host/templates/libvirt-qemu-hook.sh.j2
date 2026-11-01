@@ -1,0 +1,152 @@
+#!/bin/bash
+# {{ ansible_managed }}
+#
+# The hard limit on VM memory on this host (roles/vmtest-host/README.md, "Memory limits").
+# vmtest-audit and the lanes' own gates only work when a kit calls them. This runs on every start,
+# whoever starts the guest.
+#
+#   k8s VMs + test guests <= {{ vmtest_hosts[host_name].ram_ceiling_mib }} MiB, counted as ALLOCATED,
+#   never as free: a guest's untouched memory reads as free until the guest touches it. On
+#   2026-10-31 at 21:34:41Z zeus's kernel OOM-killed k8s-worker-2's qemu that way.
+#
+# libvirt calls this as: qemu <guest> <op> <subop> <extra>, with the domain XML on stdin.
+#
+# ⚠ libvirt KILLS a running guest when this script fails on `reconnect` or `attach`, and every
+#   libvirtd restart fires `reconnect` for every guest. So there is no `set -e` here, and `refuse`
+#   at `prepare begin` is the only non-zero exit.
+# ⚠ Never call virsh or anything else that talks to libvirtd: the daemon is waiting on this script,
+#   so that deadlocks, and a deadlocked libvirtd cannot start a crashed k8s VM.
+# ⚠ k8s VMs are decided before anything is counted. Their recovery must not depend on this script
+#   being able to read anything. A count that fails refuses a test guest, as zeus-room.sh does.
+
+guest="${1:-}"
+op="${2:-}"
+sub="${3:-}"
+
+K8S_VMS=" {{ vms | selectattr('host', 'equalto', host_name) | map(attribute='name') | join(' ') }} "
+CEILING_KIB=$(({{ vmtest_hosts[host_name].ram_ceiling_mib }} * 1024))
+
+# Only the tests set these: libvirt starts hooks with a clean environment.
+STATE_DIR="${VM_GUARD_STATE_DIR:-/run/libvirt/qemu}"
+CONFIG_DIR="${VM_GUARD_CONFIG_DIR:-/etc/libvirt/qemu}"
+HOLD_DIR="${VM_GUARD_HOLD_DIR:-/run/vm-memory-guard}"
+RESERVED_DIR="${VM_GUARD_RESERVED_DIR:-{{ vmtest_dir }}/reserved.d}"
+CHOOM="${VM_GUARD_CHOOM:-/usr/bin/choom}"
+
+# A stopped guest keeps its room this long, so a lane's power-pull or clone-copy shutdown cannot
+# lose it to someone else and come back as a false red.
+HOLD_SECONDS=1800
+# virt-install starts a new guest before it defines it, so a start in flight has no definition yet.
+START_GRACE_SECONDS=120
+
+is_k8s() { [[ "$K8S_VMS" == *" $1 "* ]]; }
+
+# The KiB in element $1 of file $2. Libvirt always writes these in KiB.
+kib() { grep -oPm1 "<$1 unit='KiB'>\K[0-9]+" "$2" 2>/dev/null; }
+
+gib() { echo $((($1 + 1048575) / 1048576)); }
+
+refuse() {
+  echo "vm-memory-guard: not starting $guest: $1" >&2
+  logger -t vm-memory-guard "refused $guest: $1" 2>/dev/null
+  exit 1
+}
+
+# Whether the hold on guest $1 still stands. One that does not is removed.
+held() {
+  local file="$HOLD_DIR/$1" age
+  [ -f "$file" ] || return 1
+  age=$(($(date +%s) - $(stat -c %Y "$file")))
+  [ "$age" -lt "$START_GRACE_SECONDS" ] && return 0
+  [ "$age" -lt "$HOLD_SECONDS" ] && [ -f "$CONFIG_DIR/$1.xml" ] && return 0
+  rm -f "$file"
+  return 1
+}
+
+case "$op/$sub" in
+  started/begin | reconnect/begin)
+    # The kernel kills the largest process first, which on this host is a k8s VM. The next shortage
+    # has to take a test guest instead. A setting on a process, so it is set on every start, and
+    # through choom because libvirtd's AppArmor profile may not let this shell lower it itself.
+    if is_k8s "$guest"; then
+      pid=$(cat "$STATE_DIR/$guest.pid" 2>/dev/null)
+      [ -n "$pid" ] && "$CHOOM" -p "$pid" -n -900 >/dev/null 2>&1
+    fi
+    exit 0
+    ;;
+  release/end)
+    if ! is_k8s "$guest"; then
+      mkdir -p "$HOLD_DIR" 2>/dev/null
+      want=$(kib memory /dev/stdin)
+      [ -n "$want" ] && echo "$want" >"$HOLD_DIR/$guest" 2>/dev/null
+    fi
+    exit 0
+    ;;
+  prepare/begin)
+    is_k8s "$guest" && exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+
+# From here on: a test guest asking to start.
+want=$(kib memory /dev/stdin)
+[ -n "$want" ] || refuse "could not read its memory size"
+mkdir -p "$HOLD_DIR" || refuse "could not create $HOLD_DIR"
+# Starts run side by side, and a guest only shows up in STATE_DIR once it is underway.
+exec 9>"$HOLD_DIR/.lock" || refuse "could not open the lock"
+flock -w 20 9 || refuse "another start held the lock for 20 s"
+
+if held "$guest"; then
+  touch "$HOLD_DIR/$guest"
+  exit 0
+fi
+
+# The k8s VMs count at the larger of what they hold and what they boot with next, and a stopped one
+# counts too: its memory must be there when it comes back. Reading both is what makes the allowance
+# shrink by itself if a VM ever returns larger than it should.
+k8s_kib=0
+for vm in $K8S_VMS; do
+  config=$(kib currentMemory "$CONFIG_DIR/$vm.xml")
+  [ -n "$config" ] || refuse "could not read the definition of $vm"
+  live=$(kib currentMemory "$STATE_DIR/$vm.xml")
+  live=${live:-0}
+  k8s_kib=$((k8s_kib + (live > config ? live : config)))
+done
+
+tests_kib=0
+for file in "$STATE_DIR"/*.xml; do
+  [ -f "$file" ] || continue
+  vm=$(basename "$file" .xml)
+  is_k8s "$vm" && continue
+  [ "$vm" = "$guest" ] && continue
+  # What vmtest-audit reads too (virsh's Used memory), so the two cannot disagree.
+  size=$(kib currentMemory "$file")
+  [ -n "$size" ] || refuse "could not read the size of $vm"
+  tests_kib=$((tests_kib + size))
+done
+for file in "$HOLD_DIR"/*; do
+  [ -f "$file" ] || continue
+  vm=$(basename "$file")
+  [ "$vm" = "$guest" ] && continue
+  [ -f "$STATE_DIR/$vm.xml" ] && continue
+  held "$vm" || continue
+  tests_kib=$((tests_kib + $(cat "$file")))
+done
+# Room a lane keeps for its second guest, as vmtest-audit counts it. A lane's own reservation is not
+# held against its own guests, or the guest it was kept for could be the one refused.
+while read -r file; do
+  lane=$(basename "$file")
+  [[ "$guest" == "$lane" || "$guest" == "$lane"-* ]] && continue
+  mib=$(tr -dc '0-9' <"$file")
+  tests_kib=$((tests_kib + ${mib:-0} * 1024))
+done < <(find "$RESERVED_DIR" -maxdepth 1 -type f -mmin -720 2>/dev/null)
+
+allowance=$((CEILING_KIB - k8s_kib))
+if [ $((tests_kib + want)) -gt "$allowance" ]; then
+  refuse "it needs $(gib "$want") GiB and test guests already hold $(gib "$tests_kib") of the $(gib "$allowance") GiB they may have ($(gib "$CEILING_KIB") ceiling less $(gib "$k8s_kib") for k8s). Run zeus-room.sh or vmtest-audit first, or stop a guest."
+fi
+
+echo "$want" >"$HOLD_DIR/$guest"
+exit 0

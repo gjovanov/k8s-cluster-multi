@@ -41,7 +41,7 @@ k8s-worker-3   Ready    worker          v1.31.14   10.10.30.11    jupiter
 | Resource | masters (x3) | workers (x3) | Total |
 |----------|-------------|-------------|-------|
 | vCPU | 2 each | 4 + 12 + 12 | 34 vCPU |
-| RAM | 8 GB each | 32 + 96 + 96 GB | 248 GB |
+| RAM | 8 GB each | 32 + 64 + 96 GB | 216 GB |
 | Disk | 40 GB each | 100 + 200 + 200 GB | 620 GB |
 
 ## Architecture
@@ -75,7 +75,7 @@ See [docs/diagrams/01-topology.mmd](docs/diagrams/01-topology.mmd) for the full 
 | mars | 198.51.100.10 | 10.10.0.1 | k8s-master-1 | 10.10.10.10 | master | 2 | 8 GB |
 | mars | 198.51.100.10 | 10.10.0.1 | k8s-worker-1 | 10.10.10.11 | worker | 4 | 32 GB |
 | zeus | 198.51.100.20 | 10.10.0.2 | k8s-master-2 | 10.10.20.10 | master | 2 | 8 GB |
-| zeus | 198.51.100.20 | 10.10.0.2 | k8s-worker-2 | 10.10.20.11 | worker | 12 | 96 GB |
+| zeus | 198.51.100.20 | 10.10.0.2 | k8s-worker-2 | 10.10.20.11 | worker | 12 | 64 GB |
 | jupiter | 198.51.100.30 | 10.10.0.3 | k8s-master-3 | 10.10.30.10 | master | 2 | 8 GB |
 | jupiter | 198.51.100.30 | 10.10.0.3 | k8s-worker-3 | 10.10.30.11 | worker | 12 | 96 GB |
 
@@ -674,7 +674,7 @@ Combined with `virsh autostart` on each VM, this ensures VMs start fresh after r
 | k8s-master-1 | 10.10.10.10 | 52:54:00:0a:01:10 | mars | control-plane | 2 | 8 GB | 40 GB |
 | k8s-worker-1 | 10.10.10.11 | 52:54:00:0a:01:11 | mars | worker | 4 | 32 GB | 100 GB |
 | k8s-master-2 | 10.10.20.10 | 52:54:00:0a:02:10 | zeus | control-plane | 2 | 8 GB | 40 GB |
-| k8s-worker-2 | 10.10.20.11 | 52:54:00:0a:02:11 | zeus | worker | 12 | 96 GB | 200 GB |
+| k8s-worker-2 | 10.10.20.11 | 52:54:00:0a:02:11 | zeus | worker | 12 | 64 GB | 200 GB |
 | k8s-master-3 | 10.10.30.10 | 52:54:00:0a:03:10 | jupiter | control-plane | 2 | 8 GB | 40 GB |
 | k8s-worker-3 | 10.10.30.11 | 52:54:00:0a:03:11 | jupiter | worker | 12 | 96 GB | 200 GB |
 

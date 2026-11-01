@@ -20,7 +20,7 @@ NEED_MIB="${1:-8192}"
 NEED_GB="${2:-40}"
 VMTEST_DIR="{{ vmtest_dir }}"
 # What the host keeps for itself: the kernel, libvirtd, qemu's overhead per VM.
-# 9540 MiB puts zeus's budget at 116 GiB: its two k8s VMs plus 12 GiB of guests.
+# 9540 MiB puts zeus's budget at 116 GiB: its two k8s VMs plus 44 GiB of guests.
 HOST_RESERVE_MIB="${VMTEST_HOST_RESERVE_MIB:-9540}"
 
 echo "== vmtest-audit @ $(hostname) $(date -u +%FT%TZ) =="

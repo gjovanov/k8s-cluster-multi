@@ -122,6 +122,26 @@
     src: vmtest-audit.sh.j2
     dest: /usr/local/bin/vmtest-audit
     mode: "0755"
+  tags: [memory-guard]
+
+- name: Install the memory guard (libvirt's qemu hook, see README "Memory limits")
+  template:
+    src: libvirt-qemu-hook.sh.j2
+    dest: /etc/libvirt/hooks/qemu
+    mode: "0755"
+    validate: bash -n %s
+  register: vmtest_memory_guard
+  when: vmtest_hosts[host_name].ram_ceiling_mib is defined
+  tags: [memory-guard]
+
+- name: A new hook takes effect only after a libvirtd restart
+  debug:
+    msg: >-
+      {{ host_name }}: /etc/libvirt/hooks/qemu changed. A hook that is NEW needs one
+      `systemctl restart libvirtd`; this role never does that, because a lane's virsh calls fail
+      during it. Follow "Memory limits" in roles/vmtest-host/README.md.
+  when: vmtest_memory_guard is changed
+  tags: [memory-guard]
 
 - name: Report
   debug:
