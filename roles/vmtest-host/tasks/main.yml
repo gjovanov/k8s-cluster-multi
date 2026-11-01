@@ -134,12 +134,12 @@
   when: vmtest_hosts[host_name].ram_ceiling_mib is defined
   tags: [memory-guard]
 
-- name: A new hook takes effect only after a libvirtd restart
+- name: A new hook takes effect only after a libvirtd reload
   debug:
     msg: >-
       {{ host_name }}: /etc/libvirt/hooks/qemu changed. A hook that is NEW needs one
-      `systemctl restart libvirtd`; this role never does that, because a lane's virsh calls fail
-      during it. Follow "Memory limits" in roles/vmtest-host/README.md.
+      `systemctl reload libvirtd`, which this role leaves to you, after the by-hand check in
+      "Memory limits" in roles/vmtest-host/README.md. An edit to an existing hook needs nothing.
   when: vmtest_memory_guard is changed
   tags: [memory-guard]
 

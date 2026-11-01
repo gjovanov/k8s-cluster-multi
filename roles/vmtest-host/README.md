@@ -91,16 +91,24 @@ ansible-playbook playbooks/15-vmtest.yml --limit zeus --tags memory-guard
 bash roles/vmtest-host/tests/memory-guard.test.sh   # on Linux, no libvirt needed
 ```
 
-⚠ **libvirt reads the hooks directory when the daemon starts.** A hook that is
-new, or removed, needs one `systemctl restart libvirtd`. Guests stay up, but a
-lane's `virsh` and `virt-install` calls fail for a few seconds, so ask first; the
-role never does it. Editing the script needs no restart.
+⚠ **libvirt caches whether a hook exists.** A hook that is new, or removed, needs
+one `systemctl reload libvirtd`. A restart is not needed: the reload (SIGHUP) keeps
+the daemon, every guest and every client connection, and fires no `reconnect`.
+`iptables-save` shows the same rules afterwards, with the per-bridge blocks swapped
+inside `LIBVIRT_*`. Editing the script needs neither. The role never reloads; do it
+after the check below.
 
-⚠ **Before that restart, run the script by hand for every running guest**
-(`/etc/libvirt/hooks/qemu <guest> reconnect begin - </dev/null; echo $?`). libvirt
-kills a running guest when the hook fails on `reconnect`, and a restart fires that
-for every guest. The same goes for any edit: never `set -e`, never a second
-non-zero exit, and never `virsh` in the script, which deadlocks the daemon.
+⚠ **Before a new hook or an edit lands where guests run, run it by hand for every
+running guest, under the daemon's own profile:**
+`sudo aa-exec -p libvirtd -- /etc/libvirt/hooks/qemu <guest> reconnect begin - </dev/null; echo $?`.
+A libvirtd restart, which a package upgrade does on its own, fires `reconnect` for
+every guest, and libvirt kills a running guest when the hook fails there. So: never
+`set -e`, never a second non-zero exit, and never `virsh` in the script, which
+deadlocks the daemon.
+
+⚠ **Test a change through real libvirt too** (a throwaway `--paused` domain costs
+nothing). libvirt fires `release end` after a refused `prepare`, for one, which no
+fixture showed: it let a refused guest in on its second try until #3.
 
 ## Shrink runbook (only on a measured shortfall)
 
