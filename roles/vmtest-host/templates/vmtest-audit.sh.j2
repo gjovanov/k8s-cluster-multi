@@ -25,6 +25,11 @@ HOST_RESERVE_MIB="${VMTEST_HOST_RESERVE_MIB:-9540}"
 
 echo "== vmtest-audit @ $(hostname) $(date -u +%FT%TZ) =="
 
+# The guests are on the system daemon. A non-root virsh asks its own empty
+# session daemon by default, and this check would pass having counted nothing.
+export LIBVIRT_DEFAULT_URI=qemu:///system
+virsh list --name >/dev/null || { echo "FAIL: cannot read libvirt, so no guest can be counted."; exit 3; }
+
 # RAM: MemAvailable is the honest number (page cache reclaims under pressure).
 avail_mib=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)
 total_mib=$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo)
