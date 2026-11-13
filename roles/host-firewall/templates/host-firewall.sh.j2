@@ -52,6 +52,11 @@ iptables -A "$HF_INPUT_CHAIN" -p tcp --dport 22 -m conntrack --ctstate NEW -j AC
 iptables -A "$HF_INPUT_CHAIN" -p udp --dport 51820 -s {{ peer }} -j ACCEPT
 {% endfor %}
 
+# Host metrics collector — scraped by the cluster's Prometheus over the mesh. It listens on the
+# tunnel address only (roles/host-hardening/tasks/host_metrics.yml); the sources are the mesh
+# hosts and the k8s nodes, see host_metrics_scrape_cidr.
+iptables -A "$HF_INPUT_CHAIN" -p tcp -s {{ host_metrics_scrape_cidr }} -d {{ bare_metal_hosts[host_name].wg_ip }} --dport {{ host_metrics_port }} -m conntrack --ctstate NEW -j ACCEPT
+
 # Per-host application allow-list (TCP)
 {% for port in (host_firewall_allowed_tcp | default([])) %}
 iptables -A "$HF_INPUT_CHAIN" -p tcp --dport {{ port }} -m conntrack --ctstate NEW -j ACCEPT

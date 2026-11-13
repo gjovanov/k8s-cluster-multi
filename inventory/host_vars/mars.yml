@@ -27,13 +27,15 @@ host_firewall_vm_subnet: "10.10.10.0/24"
 host_firewall_vm_dest_ip: "10.10.10.11"
 host_firewall_mediasoup_rtc: false
 
-# host_hardening — list of ports legitimately listening on this host. The
-# daily `listening-ports-audit.sh` cron compares actual listeners against this
-# set and writes a Prometheus textfile metric for each drift entry. The
-# UnexpectedListenerOnNode alert fires if any drift persists for >15m.
+# host_hardening — what legitimately listens on this host. Every ten minutes
+# `listening-ports-audit.sh` compares the real listeners with these lists and writes a metric
+# line for each one that is not here; UnexpectedListenerOnNode fires when such a listener is
+# reachable from another machine and two runs in a row have seen it. An entry is a port or a
+# "low:high" range. A listener bound to loopback only is recorded but never mailed, so those
+# entries exist to keep the count at zero, not to silence an alert.
 host_hardening_expected_tcp:
   - 22       # sshd
-  - 53       # dnsmasq + systemd-resolve (loopback only)
+  - 53       # dnsmasq (VM bridges) + systemd-resolve (loopback only)
   - 80       # nginx (host docker)
   - 443      # nginx (host docker)
   - 3000     # node
@@ -41,28 +43,23 @@ host_hardening_expected_tcp:
   - 3333     # bun
   - 3478     # turnserver (host) + COTURN_DNAT for VM coturn
   - 4099     # bun
-  - 4200     # bun (clawui)
+  - 4200     # bun (clawui), loopback only
   - 5000     # docker-proxy (roomler-registry — bound to 127.0.0.1)
   - 5349     # turnserver (host) + COTURN_DNAT for VM coturn
-  - 6379     # docker-proxy (roomler-ai-redis-1 — TODO rebind 127.0.0.1)
   - 8443     # haproxy K8s API LB (loopback only)
   - 9000     # docker-proxy (roomler-ai-minio-1)
   - 9001     # docker-proxy (roomler-ai-minio-1 console)
-  - 9100     # node-exporter (only via WG mesh)
-  # Docker-proxy bindings still on 0.0.0.0. The allow-list above does NOT cover a published port
-  # (it is forwarded to its container, never delivered to the host's INPUT chain);
-  # published-port-guard, below, is what closes them to the public interface. Rebinding to
+  - 9100     # host metrics collector (tunnel address only)
+  - 47989    # roomlerd (loopback only)
+  - "5900:5963"  # consoles of the throwaway test guests (loopback only)
+  # Published container ports. This list does NOT make a published port reachable or closed (it
+  # is forwarded to its container, never delivered to the host's INPUT chain);
+  # published-port-guard, below, is what closes them to the public interface. Publishing on
   # 127.0.0.1 is still the cleanup:
-  - 4001     # lgr-portal
-  - 4010     # lgr-accounting
-  - 4020     # lgr-invoicing
-  - 4030     # lgr-warehouse
-  - 4040     # lgr-payroll
-  - 4050     # lgr-hr
-  - 4060     # lgr-crm
-  - 4070     # lgr-erp
+  - 6379     # docker-proxy (a test database)
+  - 27019    # docker-proxy (a test database)
 host_hardening_expected_udp:
-  - 53       # dnsmasq + systemd-resolve
+  - 53       # dnsmasq + systemd-resolve + roomlerd (overlay addresses)
   - 67       # libvirt dnsmasq DHCP
   - 80
   - 443      # QUIC
@@ -70,8 +67,13 @@ host_hardening_expected_udp:
   - 4433     # oxmux-agent QUIC
   - 5349
   - 51820    # wireguard
-  # ephemeral oxmux-agent + dnsmasq UDP ports are NOT allow-listed
-  # (drift alert tolerates short bursts via the 15m persistence window).
+  - "43648:44415"  # roomlerd overlay: the band host_firewall_allowed_udp opens, see above
+# Processes that also send from a random port. Their sockets inside the kernel's ephemeral range
+# are expected; the same process on any other port is not.
+host_hardening_expected_udp_ephemeral:
+  - dnsmasq      # upstream queries
+  - roomlerd     # NAT traversal
+  - oxmux-agent  # QUIC client side
 
 # published-port-guard (phase 18) — mars runs containers next to the cluster, and none of the
 # ports they publish is meant for the internet: published_port_guard_open_tcp / _udp stay empty,

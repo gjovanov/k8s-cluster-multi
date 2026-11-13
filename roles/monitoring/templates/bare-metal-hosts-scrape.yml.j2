@@ -1,0 +1,22 @@
+# The bare-metal hosts' own collectors (roles/host-hardening/tasks/host_metrics.yml), one per
+# host on its tunnel address. They serve the port audit's result and nothing else. The Prometheus
+# object picks this up by its `release` label; `instance` is the host's name, so an alert says
+# "mars", not an address.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: bare-metal-hosts
+  namespace: {{ monitoring_namespace }}
+  labels:
+    release: {{ monitoring_helm_release }}
+spec:
+  jobName: bare-metal-hosts
+  scrapeInterval: 60s
+  scrapeTimeout: 10s
+  staticConfigs:
+{% for name, host in bare_metal_hosts.items() %}
+    - targets:
+        - "{{ host.wg_ip }}:{{ host_metrics_port }}"
+      labels:
+        instance: {{ name }}
+{% endfor %}

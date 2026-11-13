@@ -34,8 +34,8 @@ Mars is the front-of-house: hosts the docker `nginx` container that fronts every
    - `-i virbr1` ← **must be present or VMs hang on DHCP forever**
    - `-i wg0` style rules for WireGuard (`udp/51820`, then peer-traffic ESTABLISHED via conntrack)
    - per-host TCP/UDP allow-list from `inventory/host_vars/<host>.yml`
-4. **rp_filter MUST be 2 (loose).** `roles/host-hardening/tasks/sysctl.yml` is correct. rp_filter=1 (strict) silently drops ARP replies in the libvirt+WireGuard asymmetric-routing topology.
-5. **Drift guard is fine** — `roles/host-hardening/` (the non-firewall part) auto-applies in `playbooks/16-host-hardening.yml`. It runs `assert_no_banned.yml` (ollama/frps/asterisk/etc.) and the daily `listening-ports-audit.sh`.
+4. **rp_filter MUST be 2 (loose).** `roles/host-hardening/tasks/sysctl.yml` is correct. rp_filter=1 (strict) silently drops ARP replies in the libvirt+WireGuard asymmetric-routing topology. The role's file is what a boot applies; the running value is a question of its own (`cat /proc/sys/net/ipv4/conf/all/rp_filter`). The provider's image ships `99-hetzner.conf` with `1`, applied just before `99-host-hardening.conf`, so that file has to be on the host and say `2`: `ansible-playbook playbooks/16-host-hardening.yml --tags sysctl --check --diff` shows whether it does.
+5. **Drift guard is fine** — `roles/host-hardening/` (the non-firewall part) auto-applies in `playbooks/16-host-hardening.yml`. It runs `assert_no_banned.yml` (ollama/frps/asterisk/etc.) and the port audit (see "The port audit" below).
 
 ## A published container port is NOT behind the host firewall
 
@@ -45,6 +45,17 @@ Mars is the front-of-house: hosts the docker `nginx` container that fronts every
 - A published port also has a listener of its own on the host (`docker-proxy`), which is the path IPv6 takes. That path IS covered by the host's INPUT rules; the ports in `published_port_guard_host_tcp` are closed there as well, so one stale allow rule does not open a container. Keep that list in step with `docker ps`.
 - Publish on `127.0.0.1` (`-p 127.0.0.1:8080:80`) whenever only the host needs the port. The guard is for the day somebody forgets.
 - Two more tables on mars that are not this repo's and not iptables': `inet ssh_guard`, and `inet lgr_ci_guard` (the lgr CI runner containers on their own Docker network `lgr-ci`; recipe in `gjovanov/lgr`, `infra/ci-runner`). `nft flush ruleset` removes all of them **and** every iptables rule: never run it on a host.
+
+## The port audit
+
+Every ten minutes each bare-metal host compares what listens on it with its lists in `inventory/host_vars/<host>.yml` (`roles/host-hardening`, tag `audit`), and the host's own collector serves the result to the cluster's Prometheus.
+
+- **A listener that is not on the list** and can be reached from another machine fires `UnexpectedListenerOnNode` (critical, mail) once two runs in a row have seen it and five more minutes have passed: 15 to 25 minutes after it appeared. One that came and went between two runs fires nothing, and one bound to loopback only is recorded (`scope="loopback"`), never mailed.
+- **To allow a listener**, add its port or a `"low:high"` range to `host_hardening_expected_tcp` / `_udp`. A daemon that also sends from a random port (a resolver, NAT traversal) goes into `host_hardening_expected_udp_ephemeral` by process name: that covers its sockets inside the kernel's ephemeral range and nothing else. Then `ansible-playbook playbooks/16-host-hardening.yml --tags audit --limit <host>`.
+- **The collector** is `prometheus-node-exporter` with every default collector off, on the host's tunnel address only (`host_metrics_port`). The scrape is the `ScrapeConfig` `bare-metal-hosts` (`roles/monitoring/templates/bare-metal-hosts-scrape.yml.j2`). A host whose input chain drops by default needs the one rule `host-firewall.sh.j2` carries for the scrape; that play is not run (see above), so the rule is added by hand, as the template has it, and saved.
+- **If it goes quiet**: `HostPortAuditNotReporting` fires when a collector answers without a fresh result, and a collector that does not answer is the stack's `TargetDown`. On the host, `sudo /usr/local/bin/listening-ports-audit.sh` prints the two counts and `/var/lib/node_exporter/textfile_collector/host_unexpected_listener.prom` holds the lines.
+- The script's rules are pinned by `bash roles/host-hardening/tests/listening-ports-audit.test.sh` (fixtures; no root, no real sockets).
+- Rules and scrape objects that changed after the monitoring chart was installed were applied with `kubectl`. A run of phase 13 renders all of them again from `roles/monitoring/templates/`, so keep those templates equal to what is live.
 
 ## When networking breaks on mars
 

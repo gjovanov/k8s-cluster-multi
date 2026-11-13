@@ -1,9 +1,12 @@
 ---
-# Daily port allow-list audit. Compares actual `ss -tlnp` listeners against
-# `host_hardening_expected_listeners` (per-host list). Writes a Prometheus
-# textfile-collector metric so node-exporter exposes drift to Prometheus.
+# Port allow-list audit. Every ten minutes a script compares what listens on the host with the
+# lists in inventory/host_vars/<host>.yml (host_hardening_expected_tcp, _udp and _udp_ephemeral)
+# and writes the result as a metric file. host_metrics.yml installs the collector that serves the
+# file to the cluster's Prometheus, where the alert UnexpectedListenerOnNode reads it.
+#
+# The script's rules are pinned by roles/host-hardening/tests/listening-ports-audit.test.sh.
 
-- name: Install drift-audit script
+- name: Install the port audit script
   ansible.builtin.template:
     src: listening-ports-audit.sh.j2
     dest: /usr/local/bin/listening-ports-audit.sh
@@ -11,22 +14,31 @@
     group: root
     mode: "0755"
 
-- name: Ensure node-exporter textfile dir exists
+- name: Ensure the metric file directory exists
   ansible.builtin.file:
     path: /var/lib/node_exporter/textfile_collector
     state: directory
+    owner: root
+    group: root
     mode: "0755"
 
-- name: Schedule daily port audit (cron)
+# Ten minutes, not once a day: the alert waits fifteen minutes before it fires, and a listener
+# that came and went in between is no finding.
+- name: Schedule the port audit (cron, every ten minutes)
   ansible.builtin.cron:
     name: listening-ports-audit
     user: root
-    minute: "0"
-    hour: "5"
+    minute: "*/10"
+    hour: "*"
     job: "/usr/local/bin/listening-ports-audit.sh > /var/log/listening-ports-audit.log 2>&1"
 
-- name: Run audit immediately
+- name: Run the audit now
   ansible.builtin.command: /usr/local/bin/listening-ports-audit.sh
   register: lp_audit
   changed_when: false
   failed_when: false
+
+- name: What the audit says
+  ansible.builtin.debug:
+    msg: "{{ (lp_audit.stdout | default('')) ~ ' ' ~ (lp_audit.stderr | default('')) }}"
+  when: not ansible_check_mode

@@ -74,6 +74,23 @@
   become_user: ubuntu
   changed_when: true
 
+- name: Generate the bare-metal hosts scrape config
+  ansible.builtin.template:
+    src: bare-metal-hosts-scrape.yml.j2
+    dest: /tmp/bare-metal-hosts-scrape.yml
+    mode: "0644"
+    owner: ubuntu
+    group: ubuntu
+
+- name: Apply the bare-metal hosts scrape config
+  ansible.builtin.command:
+    cmd: kubectl apply -f /tmp/bare-metal-hosts-scrape.yml
+  environment:
+    KUBECONFIG: /home/ubuntu/.kube/config
+  become: true
+  become_user: ubuntu
+  changed_when: true
+
 - name: Wait for monitoring pods to be ready
   ansible.builtin.command:
     cmd: >-
@@ -111,6 +128,7 @@
   loop:
     - /tmp/monitoring-values.yml
     - /tmp/coturn-dashboard-cm.yml
+    - /tmp/bare-metal-hosts-scrape.yml
 
 - name: Display Grafana access info
   ansible.builtin.debug:

@@ -26,19 +26,26 @@ host_firewall_vm_subnet: "10.10.20.0/24"
 host_firewall_vm_dest_ip: "10.10.20.11"
 host_firewall_mediasoup_rtc: true
 
+# What legitimately listens on this host: a port or a "low:high" range per entry. The format and
+# what the audit does with it are described in host_vars/mars.yml.
 host_hardening_expected_tcp:
   - 22         # sshd
   - 53         # libvirt dnsmasq + systemd-resolve (loopback only)
   - 4433       # legacy oxmux-agent QUIC stray
   - 8443       # haproxy K8s API LB (loopback only)
-  - 9100       # node-exporter (only via WG mesh)
+  - 9100       # host metrics collector (tunnel address only)
+  - 47989      # roomlerd (loopback only)
+  - "5900:5963"  # consoles of the throwaway test guests (loopback only)
 host_hardening_expected_udp:
-  - 53         # dnsmasq + systemd-resolve
+  - 53         # dnsmasq + systemd-resolve + roomlerd (overlay addresses)
   - 67         # libvirt dnsmasq DHCP server for the VM subnet
-  - 4433       # legacy stray
+  - 4433       # oxmux-agent QUIC
   - 51820      # WireGuard
-  - 21640      # roomlerd overlay direct port (pinned, roomler-ai#1665)
-  - 21896      # roomlerd overlay public-dial twin (21640 + 256)
-  # libvirt dnsmasq picks ephemeral high UDP ports for upstream queries; we
-  # do NOT allow-list ephemeral ranges. The drift alert tolerates short bursts.
+  - "21640:22415"  # roomlerd overlay, the pinned footprint (see header, roomler-ai#1665)
+# Processes that also send from a random port. Their sockets inside the kernel's ephemeral range
+# are expected; the same process on any other port is not.
+host_hardening_expected_udp_ephemeral:
+  - dnsmasq      # upstream queries
+  - roomlerd     # NAT traversal
+  - oxmux-agent  # QUIC client side
 
