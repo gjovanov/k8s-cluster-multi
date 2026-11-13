@@ -1,0 +1,10 @@
+---
+# One transaction: the file deletes the table and declares it again, so there is no moment
+# without its rules, and open connections are not cut.
+- name: Load published-port-guard
+  ansible.builtin.systemd:
+    name: published-port-guard.service
+    state: restarted
+    daemon_reload: true
+  # A first run in check mode has installed no unit to restart.
+  ignore_errors: "{{ ansible_check_mode }}"

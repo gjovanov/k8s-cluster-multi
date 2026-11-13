@@ -1,0 +1,53 @@
+---
+# A container's published port is closed to the public interface unless the inventory lists it.
+# Opt-in (playbooks/18-published-port-guard.yml): only a host that runs containers needs it.
+#
+# The table is this role's own. Nothing here touches iptables, Docker's chains or the HOST_FW_*
+# chains, so a run cannot disturb the cluster's traffic, and taking it off again is two commands:
+#   systemctl disable --now published-port-guard.service
+#   nft delete table inet published_port_guard
+
+- name: Ensure nftables is installed
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+
+- name: Render the guard table
+  ansible.builtin.template:
+    src: published-port-guard.nft.j2
+    dest: /etc/published-port-guard.nft
+    owner: root
+    group: root
+    mode: "0644"
+    # A dry run against the kernel: a table that would not load is never installed.
+    validate: /usr/sbin/nft -c -f %s
+  notify: Load published-port-guard
+
+- name: Install the unit that loads it before Docker starts
+  ansible.builtin.copy:
+    src: published-port-guard.service
+    dest: /etc/systemd/system/published-port-guard.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Load published-port-guard
+
+- name: Enable and start the unit
+  ansible.builtin.systemd:
+    name: published-port-guard.service
+    enabled: true
+    state: started
+    daemon_reload: true
+  # A first run in check mode has installed no unit to enable.
+  ignore_errors: "{{ ansible_check_mode }}"
+
+# A changed table is loaded now, not at the end of the play: the check below reads the live one.
+- name: Flush handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: The table is loaded
+  ansible.builtin.command: /usr/sbin/nft list table inet published_port_guard
+  changed_when: false
+  check_mode: false
+  register: published_port_guard_live
+  failed_when: published_port_guard_live.rc != 0 and not ansible_check_mode

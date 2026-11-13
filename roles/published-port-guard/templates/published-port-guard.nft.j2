@@ -1,0 +1,79 @@
+#!/usr/sbin/nft -f
+# {{ ansible_managed }}
+#
+# The ports that containers publish on this host are closed to the public interface, unless the
+# inventory lists them (published_port_guard_open_tcp / _udp).
+#
+# Why the host firewall does not decide this. A published port is rewritten to the container's
+# address on arrival and then FORWARDED: the host's INPUT rules are never asked, and Docker's own
+# FORWARD rules accept it ahead of HOST_FW_FORWARD. So `-p 8080:80` publishes to every interface,
+# whatever the host's allow-list says.
+#
+# A table of its own, like ssh_guard: no other tool writes to it, a drop here is final whatever
+# the host's other tables accept (every base chain on a hook is consulted, this one first), and
+# it matches interfaces by NAME, so it holds before Docker makes its bridges.
+#
+# Loaded by published-port-guard.service before Docker starts. Check it with:
+#   nft list table inet published_port_guard      (the counters say what was dropped)
+table inet published_port_guard
+delete table inet published_port_guard
+
+table inet published_port_guard {
+	# Published ports meant for the internet, by the port the caller asks for.
+	set open_tcp {
+		type inet_service
+		flags interval
+{% if published_port_guard_open_tcp %}
+		elements = { {{ published_port_guard_open_tcp | join(', ') }} }
+{% endif %}
+	}
+
+	set open_udp {
+		type inet_service
+		flags interval
+{% if published_port_guard_open_udp %}
+		elements = { {{ published_port_guard_open_udp | join(', ') }} }
+{% endif %}
+	}
+
+	# The ports containers publish, as the host's own listeners for them see them.
+	set host_tcp {
+		type inet_service
+		flags interval
+{% if published_port_guard_host_tcp %}
+		elements = { {{ published_port_guard_host_tcp | join(', ') }} }
+{% endif %}
+	}
+
+	set host_udp {
+		type inet_service
+		flags interval
+{% if published_port_guard_host_udp %}
+		elements = { {{ published_port_guard_host_udp | join(', ') }} }
+{% endif %}
+	}
+
+	# The rewritten path: a new connection from the public interface to a container's bridge.
+	# Answers to what a container itself started are not new, and pass.
+	chain forward {
+		type filter hook forward priority filter - 15; policy accept;
+{% for bridge in published_port_guard_bridges %}
+		iifname "{{ published_port_guard_public_iface }}" oifname "{{ bridge }}" ct state new jump from_outside
+{% endfor %}
+	}
+
+	# The forward hook sees the connection after the rewrite. The port the caller asked for is
+	# the one conntrack remembers as the original destination.
+	chain from_outside {
+		meta l4proto tcp ct original proto-dst @open_tcp accept
+		meta l4proto udp ct original proto-dst @open_udp accept
+		counter drop
+	}
+
+	# The path that is not rewritten: the listener each published port has on the host itself.
+	chain input {
+		type filter hook input priority filter - 15; policy accept;
+		iifname "{{ published_port_guard_public_iface }}" ct state new tcp dport @host_tcp tcp dport != @open_tcp counter drop
+		iifname "{{ published_port_guard_public_iface }}" ct state new udp dport @host_udp udp dport != @open_udp counter drop
+	}
+}

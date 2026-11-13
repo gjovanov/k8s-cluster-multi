@@ -1,0 +1,19 @@
+---
+# Phase 18: published-port guard — OPT-IN.
+#
+# For a bare-metal host that runs containers next to the cluster (mars). A port a container
+# publishes is forwarded before the host's INPUT rules are asked, so the host firewall's
+# allow-list does not decide whether it is public. This does: closed to the public interface
+# unless the host's inventory lists it. site.yml does not import this phase. Run explicitly:
+#
+#   make published-port-guard
+#
+# What a run would change, without changing it:
+#
+#   ansible-playbook playbooks/18-published-port-guard.yml --check --diff
+
+- name: Published-port guard (container ports are closed to the public interface unless listed)
+  hosts: mars
+  become: true
+  roles:
+    - role: published-port-guard

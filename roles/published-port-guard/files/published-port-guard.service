@@ -1,0 +1,12 @@
+[Unit]
+Description=Published-port guard (container ports are closed to the public interface unless listed)
+After=network-pre.target
+Before=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/nft -f /etc/published-port-guard.nft
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
