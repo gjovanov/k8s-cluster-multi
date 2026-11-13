@@ -37,6 +37,15 @@ Mars is the front-of-house: hosts the docker `nginx` container that fronts every
 4. **rp_filter MUST be 2 (loose).** `roles/host-hardening/tasks/sysctl.yml` is correct. rp_filter=1 (strict) silently drops ARP replies in the libvirt+WireGuard asymmetric-routing topology.
 5. **Drift guard is fine** — `roles/host-hardening/` (the non-firewall part) auto-applies in `playbooks/16-host-hardening.yml`. It runs `assert_no_banned.yml` (ollama/frps/asterisk/etc.) and the daily `listening-ports-audit.sh`.
 
+## A published container port is NOT behind the host firewall
+
+`-p 8080:80` on a container publishes to every interface, whatever `host_firewall_allowed_tcp` says: the port is rewritten to the container's address on arrival and FORWARDED, so `HOST_FW_INPUT` is never asked, and Docker's own FORWARD rules accept it ahead of `HOST_FW_FORWARD`. Whether such a port is public is decided by `roles/published-port-guard` (phase 18, `make published-port-guard`, opt-in, mars): **closed to the public interface unless the host's inventory lists it** in `published_port_guard_open_tcp` / `_udp`.
+
+- It is a table of its own (`inet published_port_guard`, `/etc/published-port-guard.nft`, loaded by `published-port-guard.service` before Docker). It is not iptables', so `netfilter-persistent`, a re-render of the host firewall and Docker's own rule changes do not touch it. `sudo nft list table inet published_port_guard` shows it and what it dropped.
+- A published port also has a listener of its own on the host (`docker-proxy`), which is the path IPv6 takes. That path IS covered by the host's INPUT rules; the ports in `published_port_guard_host_tcp` are closed there as well, so one stale allow rule does not open a container. Keep that list in step with `docker ps`.
+- Publish on `127.0.0.1` (`-p 127.0.0.1:8080:80`) whenever only the host needs the port. The guard is for the day somebody forgets.
+- Two more tables on mars that are not this repo's and not iptables': `inet ssh_guard`, and `inet lgr_ci_guard` (the lgr CI runner containers on their own Docker network `lgr-ci`; recipe in `gjovanov/lgr`, `infra/ci-runner`). `nft flush ruleset` removes all of them **and** every iptables rule: never run it on a host.
+
 ## When networking breaks on mars
 
 Symptom: K8s nodes NotReady, `kubectl` hangs, `tickytack.app`/`argocd.roomler.ai`/`roomler.live` return HTTP 000. The VMs are listed `running` by `virsh` but not pingable on `10.10.10.{10,11}`.

@@ -1,0 +1,23 @@
+---
+# The interface the internet arrives on.
+published_port_guard_public_iface: "{{ bare_metal_hosts[inventory_hostname].interface }}"
+
+# The bridges containers sit on. A trailing * matches by prefix: Docker names a network's bridge
+# br-<id> unless it is told a name.
+published_port_guard_bridges:
+  - docker0
+  - "br-*"
+
+# Published ports that ARE meant for the internet, by the port the caller asks for (not the
+# container's own). None by default: a container's port is published to this host and to the
+# networks behind it, and to the internet only when it is written down here.
+published_port_guard_open_tcp: []
+published_port_guard_open_udp: []
+
+# The ports containers publish on this host, for the one path the rule on the bridges does not
+# see. Each published port also has a listener of its own on the host (docker-proxy), and a
+# connection that is not rewritten on arrival reaches that listener like any service of the host.
+# IPv6 is not rewritten. The host's INPUT rules do cover this path; these ports are closed here
+# as well, so that one stale allow rule there does not open a container.
+published_port_guard_host_tcp: []
+published_port_guard_host_udp: []

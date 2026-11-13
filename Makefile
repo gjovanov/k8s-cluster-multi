@@ -114,6 +114,9 @@ vmtest-host-mars: ## Phase 15 on mars only
 registry-retention: ## Phase 17 (opt-in): weekly registry.roomler.ai retention job on mars
 	ansible-playbook $(PLAYBOOKS)/17-registry-retention.yml
 
+published-port-guard: ## Phase 18 (opt-in): container-published ports closed to the public interface unless listed (mars)
+	ansible-playbook $(PLAYBOOKS)/18-published-port-guard.yml
+
 verify: ## Run verification script
 	bash $(SCRIPTS)/verify-cluster.sh
 
