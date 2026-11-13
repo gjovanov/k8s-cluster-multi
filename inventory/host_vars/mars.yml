@@ -61,7 +61,6 @@ host_hardening_expected_tcp:
   - 4050     # lgr-hr
   - 4060     # lgr-crm
   - 4070     # lgr-erp
-  - 27018    # lgr-mongo
 host_hardening_expected_udp:
   - 53       # dnsmasq + systemd-resolve
   - 67       # libvirt dnsmasq DHCP
@@ -81,6 +80,5 @@ host_hardening_expected_udp:
 # host, which is what IPv6 reaches): keep it in step with `docker ps`.
 published_port_guard_host_tcp:
   - 6379     # docker-proxy
-  - 27018    # docker-proxy (lgr-mongo)
   - 27019    # docker-proxy
 
