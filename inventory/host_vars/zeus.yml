@@ -42,6 +42,7 @@ host_hardening_expected_udp:
   - 4433       # oxmux-agent QUIC
   - 51820      # WireGuard
   - "21640:22415"  # roomlerd overlay, the pinned footprint (see header, roomler-ai#1665)
+  - "5353@roomlerd"  # mDNS, held by roomlerd for as long as a remote-control session is open
 # Processes that also send from a random port. Their sockets inside the kernel's ephemeral range
 # are expected; the same process on any other port is not.
 host_hardening_expected_udp_ephemeral:

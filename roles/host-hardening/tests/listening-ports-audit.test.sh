@@ -173,5 +173,29 @@ if [ "$first" = 2 ] && [ "$second_a" = 2 ] && [ "$second_b" = 2 ] && [ "$rc_fail
 else fail "13 the value counts consecutive sightings and starts over after an absence" \
      "first=$first second=$second_a/$second_b failed-run rc=$rc_failed kept=$after_failed third=$third_a/$third_b fourth=$fourth_a/$fourth_b" "$(cat "$prom" 2>&1)"; fi
 
+# 14. An entry may name the process a port belongs to. It covers the port, or the range, for that
+#     process alone: the same port under another name is reported, and so is that process on the
+#     next port. The name starts after the first @ and may itself hold an @ or a colon. The plain
+#     entries beside it keep their meaning.
+fresh; render "22 8080@caddy 9000@svc@1 9001@a:b" "53 5353@roomlerd 6000:6010@gamed 7000" ""
+tcp '0.0.0.0:22' sshd; tcp '10.0.0.1:8080' caddy; tcp '10.0.0.2:8080' nginx; tcp '0.0.0.0:9000' 'svc@1'; tcp '0.0.0.0:9001' 'a:b'
+udp '0.0.0.0:53' dnsmasq; udp '224.0.0.251:5353' roomlerd; udp '0.0.0.0:5353' avahi-daemon; udp '0.0.0.0:5354' roomlerd
+udp '0.0.0.0:6000' gamed; udp '0.0.0.0:6010' gamed; udp '0.0.0.0:6011' gamed; udp '0.0.0.0:6005' other; udp '0.0.0.0:7000' nc
+run
+if [ "$rc" = 0 ] && [ "$(entries)" = 5 ] && has 'proto="tcp",port="8080",process="nginx"' && has 'proto="udp",port="5353",process="avahi-daemon"' \
+   && has 'port="5354",process="roomlerd"' && has 'port="6011",process="gamed"' && has 'port="6005",process="other"'; then
+  ok "14 an entry with @process covers the port for that process alone"
+else fail "14 an entry with @process covers the port for that process alone" "rc=$rc" "$(cat "$prom" 2>&1)"; fi
+
+# 15. The process is compared whole, and an entry written wrongly covers nothing: a name that is
+#     only the beginning of the process's, one that is longer, an empty one, the two parts in the
+#     wrong order.
+fresh; render "" "5353@roomler 5354@roomlerd-helper 5355@ roomlerd@5356" ""
+udp '0.0.0.0:5353' roomlerd; udp '0.0.0.0:5354' roomlerd; udp '0.0.0.0:5355' roomlerd; udp '0.0.0.0:5356' roomlerd
+run
+if [ "$(entries)" = 4 ] && has 'port="5353"' && has 'port="5354"' && has 'port="5355"' && has 'port="5356"'; then
+  ok "15 the process is compared whole, and a malformed entry covers nothing"
+else fail "15 the process is compared whole, and a malformed entry covers nothing" "$(cat "$prom" 2>&1)"; fi
+
 echo
 if [ "$fails" = 0 ]; then echo "all passed"; else echo "$fails failed"; exit 1; fi
