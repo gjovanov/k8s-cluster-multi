@@ -12,10 +12,15 @@
 # reached from another machine, so it is recorded, not mailed. It also waits for N = 2, a listener
 # that two runs in a row found.
 #
-# A list entry is one port (443) or a range ("21640:22415"). For UDP there is a second list,
-# EPHEMERAL_UDP: a process named there may also hold sockets inside the kernel's ephemeral port
-# range. A resolver or a NAT-traversal daemon sends from a random port and that port is another
-# one after every restart, so it cannot be written down as a number.
+# A list entry is one port (443) or a range ("21640:22415"). Either may name the process the port
+# belongs to ("5353@roomlerd"): the entry then covers the port only while that process holds it,
+# and the same port under any other process is reported. The name is the one a report shows in
+# its process label, compared whole.
+#
+# For UDP there is a second list, EPHEMERAL_UDP: a process named there may also hold sockets
+# inside the kernel's ephemeral port range. A resolver or a NAT-traversal daemon sends from a
+# random port and that port is another one after every restart, so it cannot be written down as
+# a number.
 #
 # Rendered from roles/host-hardening/templates/listening-ports-audit.sh.j2; the lists come from
 # inventory, never from an edit of this file. Tests (they need nothing but bash and awk):
@@ -49,13 +54,21 @@ eph_hi=${2:-60999}
 # audit <tcp|udp> <expected list>: one metric line per socket that is not expected.
 audit() {
   read_sockets "$1" | awk -v proto="$1" -v list="$2" -v roam="$EPHEMERAL_UDP" -v elo="$eph_lo" -v ehi="$eph_hi" '
-    function expected(port,   n, i, a, r) {
+    # Is this socket on the list? An entry that ends in @process is for that process alone: under
+    # any other name it is passed over, and so is one whose process part is empty.
+    function expected(port, name,   n, i, a, r, at, spec) {
       n = split(list, a, " ")
       for (i = 1; i <= n; i++) {
-        if (index(a[i], ":") > 0) {
-          split(a[i], r, ":")
+        spec = a[i]
+        at = index(spec, "@")
+        if (at > 0) {
+          if (substr(spec, at + 1) != name) continue
+          spec = substr(spec, 1, at - 1)
+        }
+        if (index(spec, ":") > 0) {
+          split(spec, r, ":")
           if (port + 0 >= r[1] + 0 && port + 0 <= r[2] + 0) return 1
-        } else if (a[i] + 0 == port + 0) {
+        } else if (spec + 0 == port + 0) {
           return 1
         }
       }
@@ -87,7 +100,7 @@ audit() {
       # The name ends up inside a label value, and a process chooses its own name.
       gsub(/[^A-Za-z0-9._:@+-]/, "_", name)
 
-      if (expected(port)) next
+      if (expected(port, name)) next
       if (proto == "udp" && port + 0 >= elo + 0 && port + 0 <= ehi + 0 && may_roam(name)) next
 
       printf "host_unexpected_listener{proto=\"%s\",port=\"%s\",process=\"%s\",scope=\"%s\"} 1\n", proto, port, name, scope

@@ -6,6 +6,18 @@
 #
 # The script's rules are pinned by roles/host-hardening/tests/listening-ports-audit.test.sh.
 
+# A mistyped entry stops the run here. On the host it would cover nothing, or more than was meant.
+- name: Check the form of every list entry
+  ansible.builtin.assert:
+    that:
+      - lpa_bad_entries | length == 0
+    fail_msg: "not a port, a low:high range, or one of those followed by @process: {{ lpa_bad_entries | join(', ') }}"
+    quiet: true
+  vars:
+    lpa_bad_entries: >-
+      {{ ((host_hardening_expected_tcp | default([])) + (host_hardening_expected_udp | default([])))
+         | map('string') | reject('match', '^[0-9]+(:[0-9]+)?(@[A-Za-z0-9._:@+-]+)?$') | list }}
+
 - name: Install the port audit script
   ansible.builtin.template:
     src: listening-ports-audit.sh.j2
