@@ -11,6 +11,9 @@
 - import_tasks: listening_ports_audit.yml
   tags: [drift-guard, audit]
 
+- import_tasks: host_metrics.yml
+  tags: [drift-guard, audit]
+
 - import_tasks: ssh_hardening.yml
   tags: [ssh]
 

@@ -1,0 +1,87 @@
+---
+# The host's own metrics collector. It exists for one thing: to hand the port audit's result to
+# the cluster's Prometheus, so the alert UnexpectedListenerOnNode has something to read. It
+# listens on the host's tunnel address only, and every default collector is off: what else a
+# bare-metal host should export is a decision of its own.
+#
+# The scrape reaches it over the mesh. On a host whose input chain drops by default, that takes
+# the one rule roles/host-firewall/templates/host-firewall.sh.j2 carries for it.
+
+# Both files are written BEFORE the package is installed. The package starts its service at once,
+# and with its own defaults that would be every collector on every address for a moment.
+- name: Collector arguments
+  ansible.builtin.copy:
+    dest: /etc/default/prometheus-node-exporter
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by ansible — see roles/host-hardening/tasks/host_metrics.yml.
+      ARGS="--web.listen-address={{ bare_metal_hosts[host_name].wg_ip }}:{{ host_metrics_port }} --web.disable-exporter-metrics --collector.disable-defaults --collector.textfile --collector.textfile.directory=/var/lib/node_exporter/textfile_collector"
+  register: host_metrics_args
+
+- name: Collector unit drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/prometheus-node-exporter.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Start the collector after the tunnel, and again until its address is there
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/prometheus-node-exporter.service.d/10-tunnel-address.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by ansible — see roles/host-hardening/tasks/host_metrics.yml.
+      # The collector binds the tunnel address, and at boot that address arrives with the tunnel.
+      [Unit]
+      After=wg-quick@{{ wg_interface }}.service
+
+      [Service]
+      Restart=always
+      RestartSec=15
+  register: host_metrics_dropin
+
+- name: Install the collector
+  ansible.builtin.apt:
+    name: prometheus-node-exporter
+    state: present
+    install_recommends: false
+    update_cache: true
+    cache_valid_time: 3600
+    lock_timeout: 120
+  environment:
+    # Installing one package must not be the moment other services get restarted.
+    NEEDRESTART_SUSPEND: "1"
+
+- name: Enable and start the collector
+  ansible.builtin.systemd:
+    name: prometheus-node-exporter
+    enabled: true
+    state: started
+    daemon_reload: true
+  # A first run in check mode has no unit yet.
+  ignore_errors: "{{ ansible_check_mode }}"
+
+- name: Restart the collector when its configuration changed
+  ansible.builtin.systemd:
+    name: prometheus-node-exporter
+    state: restarted
+    daemon_reload: true
+  when: host_metrics_args is changed or host_metrics_dropin is changed
+  ignore_errors: "{{ ansible_check_mode }}"
+
+- name: The collector serves the audit's result on the tunnel address
+  ansible.builtin.uri:
+    url: "http://{{ bare_metal_hosts[host_name].wg_ip }}:{{ host_metrics_port }}/metrics"
+    return_content: true
+  register: host_metrics_probe
+  retries: 6
+  delay: 5
+  until: >-
+    host_metrics_probe.status | default(0) == 200
+    and 'host_port_audit_last_run_timestamp_seconds' in (host_metrics_probe.content | default(''))
+  when: not ansible_check_mode

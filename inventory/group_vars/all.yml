@@ -355,6 +355,14 @@ host_firewall_wg_peer_subnets:
 # Per-host overrides applied via host_vars/{mars,zeus,jupiter}.yml
 # (see those files for host_firewall_allowed_tcp / _udp / _vm_subnet / _vm_dest_ip).
 
+# Host metrics collector (roles/host-hardening/tasks/host_metrics.yml): the port each host serves
+# its port audit on, at its tunnel address, and who may scrape it. The /19 is the mesh /24 plus
+# the three k8s VM subnets above (10.10.0.0 to 10.10.31.255) and nothing else: the Prometheus pod
+# arrives as the node it runs on, and that can be any of them. The subnets of test guests and of
+# CI runners (10.10.110.0/24 and up) are outside it on purpose.
+host_metrics_port: 9100
+host_metrics_scrape_cidr: "10.10.0.0/19"
+
 # ============================================================
 # SNI Proxy (mars only)
 # ============================================================
