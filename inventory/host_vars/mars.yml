@@ -33,6 +33,12 @@ host_firewall_mediasoup_rtc: false
 # reachable from another machine and two runs in a row have seen it. An entry is a port or a
 # "low:high" range. A listener bound to loopback only is recorded but never mailed, so those
 # entries exist to keep the count at zero, not to silence an alert.
+#
+# An entry covers its port on EVERY address unless it says where the port belongs: "8443%lo" is
+# the port on a loopback address only, "9100%10.10.0.1" on that one address only. Bound anywhere
+# else, the same port is reported like any listener that is not listed. So an entry for a
+# service that answers the host alone always carries %lo. "@process" (below, on the mDNS port)
+# comes last when an entry has both.
 host_hardening_expected_tcp:
   - 22       # sshd
   - 53       # dnsmasq (VM bridges) + systemd-resolve (loopback only)
@@ -43,15 +49,15 @@ host_hardening_expected_tcp:
   - 3333     # bun
   - 3478     # turnserver (host) + COTURN_DNAT for VM coturn
   - 4099     # bun
-  - 4200     # bun (clawui), loopback only
-  - 5000     # docker-proxy (roomler-registry — bound to 127.0.0.1)
+  - "4200%lo"   # bun (clawui)
+  - "5000%lo"   # docker-proxy (roomler-registry, published on 127.0.0.1)
   - 5349     # turnserver (host) + COTURN_DNAT for VM coturn
-  - 8443     # haproxy K8s API LB (loopback only)
+  - "8443%lo"   # haproxy K8s API LB
   - 9000     # docker-proxy (roomler-ai-minio-1)
   - 9001     # docker-proxy (roomler-ai-minio-1 console)
-  - 9100     # host metrics collector (tunnel address only)
-  - 47989    # roomlerd (loopback only)
-  - "5900:5963"  # consoles of the throwaway test guests (loopback only)
+  - "9100%10.10.0.1"  # host metrics collector, on the tunnel address
+  - "47989%lo"  # roomlerd
+  - "5900:5963%lo"  # consoles of the throwaway test guests
   # Published container ports. This list does NOT make a published port reachable or closed (it
   # is forwarded to its container, never delivered to the host's INPUT chain);
   # published-port-guard, below, is what closes them to the public interface. Publishing on

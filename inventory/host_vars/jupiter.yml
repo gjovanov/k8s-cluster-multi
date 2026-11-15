@@ -23,14 +23,15 @@ host_firewall_vm_subnet: "10.10.30.0/24"
 host_firewall_vm_dest_ip: "10.10.30.11"
 host_firewall_mediasoup_rtc: true
 
-# What legitimately listens on this host: a port or a "low:high" range per entry. The format and
-# what the audit does with it are described in host_vars/mars.yml.
+# What legitimately listens on this host: a port or a "low:high" range per entry, with %lo or
+# %address where the port belongs on one place only. The format and what the audit does with it
+# are described in host_vars/mars.yml.
 host_hardening_expected_tcp:
   - 22         # sshd
   - 53         # libvirt dnsmasq + systemd-resolve (loopback only)
-  - 8443       # haproxy K8s API LB (loopback only)
-  - 9100       # host metrics collector (tunnel address only)
-  - 47989      # roomlerd (loopback only)
+  - "8443%lo"    # haproxy K8s API LB
+  - "9100%10.10.0.3"  # host metrics collector, on the tunnel address
+  - "47989%lo"   # roomlerd
 host_hardening_expected_udp:
   - 53         # dnsmasq + systemd-resolve + roomlerd (overlay addresses)
   - 67         # libvirt dnsmasq DHCP server for the VM subnet (virbr1 only)
