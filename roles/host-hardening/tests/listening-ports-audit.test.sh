@@ -197,5 +197,42 @@ if [ "$(entries)" = 4 ] && has 'port="5353"' && has 'port="5354"' && has 'port="
   ok "15 the process is compared whole, and a malformed entry covers nothing"
 else fail "15 the process is compared whole, and a malformed entry covers nothing" "$(cat "$prom" 2>&1)"; fi
 
+# 16. An entry may say where the port is bound. "%lo" covers it on a loopback address only, in
+#     every form ss writes one (127.x, ::1, an IPv4-mapped one, with an interface): the same port
+#     on all addresses, or on one of the host's own, is reported as on the network. A range
+#     takes it too, UDP as well, and the plain entry beside it still covers its port everywhere.
+fresh; render "22 8443%lo 5900:5963%lo" "53%lo" ""
+tcp '0.0.0.0:22' sshd; tcp '127.0.0.1:8443' haproxy; tcp '0.0.0.0:8443' haproxy
+tcp '127.0.0.1:5900' qemu; tcp '[::1]:5901' qemu; tcp '[::ffff:127.0.0.1]:5902' qemu; tcp '127.0.0.2%lo:5963' qemu
+tcp '*:5904' qemu; tcp '10.10.20.1:5905' qemu; tcp '[::]:5906' qemu
+udp '127.0.0.53%lo:53' systemd-resolve; udp '10.10.20.1:53' dnsmasq
+run
+if [ "$rc" = 0 ] && [ "$(entries)" = 5 ] && has 'proto="tcp",port="8443",process="haproxy",scope="network"' \
+   && has 'port="5904",process="qemu",scope="network"' && has 'port="5905",process="qemu",scope="network"' \
+   && has 'port="5906",process="qemu",scope="network"' && has 'proto="udp",port="53",process="dnsmasq",scope="network"' \
+   && has 'host_port_audit_unexpected{scope="network"} 5' && has 'host_port_audit_unexpected{scope="loopback"} 0'; then
+  ok "16 an entry with %lo covers the port on loopback only"
+else fail "16 an entry with %lo covers the port on loopback only" "rc=$rc" "$(cat "$prom" 2>&1)"; fi
+
+# 17. Or it names the one address the port belongs on, compared whole: an address that continues
+#     the entry's, or stops short of it, is another address, and an IPv6 one keeps its colons.
+#     With a process both must hold. Written wrongly the part covers nothing: empty, given
+#     twice, or after the process instead of before it.
+fresh; render "9100%10.10.0.2 9101%10.10.0.2@exporter 9102@svc%lo 9103% 9104%lo%lo 9105%fd00::1 9106%10.10.0.20" "5353%224.0.0.251@roomlerd 5354%224.0.0.251@roomlerd" ""
+tcp '10.10.0.2:9100' exporter; tcp '10.10.0.20:9100' longer; tcp '0.0.0.0:9100' wide
+tcp '10.10.0.2:9101' exporter; tcp '10.10.0.2:9101' other; tcp '127.0.0.1:9101' exporter
+tcp '127.0.0.1:9102' svc; tcp '127.0.0.1:9103' empty; tcp '127.0.0.1:9104' twice
+tcp '[fd00::1]:9105' six; tcp '[fd00::10]:9105' sixlonger; tcp '10.10.0.2:9106' shorter
+udp '224.0.0.251:5353' roomlerd; udp '0.0.0.0:5354' roomlerd
+run
+if [ "$rc" = 0 ] && [ "$(entries)" = 10 ] && has 'port="9100",process="longer",scope="network"' && has 'port="9100",process="wide",scope="network"' \
+   && has 'port="9101",process="other",scope="network"' && has 'port="9101",process="exporter",scope="loopback"' \
+   && has 'port="9102",process="svc",scope="loopback"' && has 'port="9103",process="empty",scope="loopback"' \
+   && has 'port="9104",process="twice",scope="loopback"' && has 'port="9105",process="sixlonger",scope="network"' \
+   && has 'port="9106",process="shorter",scope="network"' && has 'proto="udp",port="5354",process="roomlerd",scope="network"' \
+   && has 'host_port_audit_unexpected{scope="network"} 6' && has 'host_port_audit_unexpected{scope="loopback"} 4'; then
+  ok "17 an entry with %address covers the port on that address alone"
+else fail "17 an entry with %address covers the port on that address alone" "rc=$rc" "$(cat "$prom" 2>&1)"; fi
+
 echo
 if [ "$fails" = 0 ]; then echo "all passed"; else echo "$fails failed"; exit 1; fi

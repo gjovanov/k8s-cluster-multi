@@ -17,6 +17,12 @@
 # and the same port under any other process is reported. The name is the one a report shows in
 # its process label, compared whole.
 #
+# Either may also say where the port is bound, before the process if there is one: "8443%lo" covers
+# the port on a loopback address only, "9100%10.10.0.1" on that one address only (written as `ss`
+# prints it, without brackets or an interface, compared whole). The same port bound anywhere else
+# is reported. Without it an entry covers the port on every address, so a service that is meant
+# to answer the host alone gets "%lo": the day it is bound wider, the audit says so.
+#
 # For UDP there is a second list, EPHEMERAL_UDP: a process named there may also hold sockets
 # inside the kernel's ephemeral port range. A resolver or a NAT-traversal daemon sends from a
 # random port and that port is another one after every restart, so it cannot be written down as
@@ -55,8 +61,11 @@ eph_hi=${2:-60999}
 audit() {
   read_sockets "$1" | awk -v proto="$1" -v list="$2" -v roam="$EPHEMERAL_UDP" -v elo="$eph_lo" -v ehi="$eph_hi" '
     # Is this socket on the list? An entry that ends in @process is for that process alone: under
-    # any other name it is passed over, and so is one whose process part is empty.
-    function expected(port, name,   n, i, a, r, at, spec) {
+    # any other name it is passed over, and so is one whose process part is empty. An entry with
+    # %where is for that place alone: "lo" is any loopback address, anything else is one address,
+    # compared whole as a string. The place is cut off before the port is read: an IPv6 address
+    # has colons of its own, and a colon in what is left means a range.
+    function expected(port, name, addr, scope,   n, i, a, r, at, pct, spec, where) {
       n = split(list, a, " ")
       for (i = 1; i <= n; i++) {
         spec = a[i]
@@ -64,6 +73,14 @@ audit() {
         if (at > 0) {
           if (substr(spec, at + 1) != name) continue
           spec = substr(spec, 1, at - 1)
+        }
+        pct = index(spec, "%")
+        if (pct > 0) {
+          where = substr(spec, pct + 1)
+          if (where == "lo") {
+            if (scope != "loopback") continue
+          } else if ((where "") != (addr "")) continue
+          spec = substr(spec, 1, pct - 1)
         }
         if (index(spec, ":") > 0) {
           split(spec, r, ":")
@@ -100,7 +117,7 @@ audit() {
       # The name ends up inside a label value, and a process chooses its own name.
       gsub(/[^A-Za-z0-9._:@+-]/, "_", name)
 
-      if (expected(port, name)) next
+      if (expected(port, name, addr, scope)) next
       if (proto == "udp" && port + 0 >= elo + 0 && port + 0 <= ehi + 0 && may_roam(name)) next
 
       printf "host_unexpected_listener{proto=\"%s\",port=\"%s\",process=\"%s\",scope=\"%s\"} 1\n", proto, port, name, scope
