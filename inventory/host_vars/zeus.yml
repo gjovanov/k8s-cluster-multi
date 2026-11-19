@@ -32,7 +32,6 @@ host_firewall_mediasoup_rtc: true
 host_hardening_expected_tcp:
   - 22         # sshd
   - 53         # libvirt dnsmasq + systemd-resolve (loopback only)
-  - 4433       # legacy oxmux-agent QUIC stray
   - "8443%lo"    # haproxy K8s API LB
   - "9100%10.10.0.2"  # host metrics collector, on the tunnel address
   - "47989%lo"   # roomlerd
