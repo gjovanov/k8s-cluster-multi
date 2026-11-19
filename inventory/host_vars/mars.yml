@@ -44,17 +44,10 @@ host_hardening_expected_tcp:
   - 53       # dnsmasq (VM bridges) + systemd-resolve (loopback only)
   - 80       # nginx (host docker)
   - 443      # nginx (host docker)
-  - 3000     # node
-  - 3080     # bun
-  - 3333     # bun
-  - 3478     # turnserver (host) + COTURN_DNAT for VM coturn
-  - 4099     # bun
+  - 3080     # bun (audio-waveform)
   - "4200%lo"   # bun (clawui)
   - "5000%lo"   # docker-proxy (roomler-registry, published on 127.0.0.1)
-  - 5349     # turnserver (host) + COTURN_DNAT for VM coturn
   - "8443%lo"   # haproxy K8s API LB
-  - 9000     # docker-proxy (roomler-ai-minio-1)
-  - 9001     # docker-proxy (roomler-ai-minio-1 console)
   - "9100%10.10.0.1"  # host metrics collector, on the tunnel address
   - "47989%lo"  # roomlerd
   - "5900:5963%lo"  # consoles of the throwaway test guests
@@ -64,14 +57,14 @@ host_hardening_expected_tcp:
   # 127.0.0.1 is still the cleanup:
   - 6379     # docker-proxy (a test database)
   - 27019    # docker-proxy (a test database)
+  # 3478 and 5349 are in neither list although the firewall opens them: the TURN server runs in
+  # the cluster on the worker VM, and the host only forwards those ports to it (coturn-iptables),
+  # so nothing on the host itself listens there. A host process that does is reported.
 host_hardening_expected_udp:
   - 53       # dnsmasq + systemd-resolve + roomlerd (overlay addresses)
   - 67       # libvirt dnsmasq DHCP
-  - 80
   - 443      # QUIC
-  - 3478
   - 4433     # oxmux-agent QUIC
-  - 5349
   - 51820    # wireguard
   - "43648:44415"  # roomlerd overlay: the band host_firewall_allowed_udp opens, see above
   - "5353@roomlerd"  # mDNS, held by roomlerd for as long as a remote-control session is open
