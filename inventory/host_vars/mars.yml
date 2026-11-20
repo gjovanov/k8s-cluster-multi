@@ -47,16 +47,12 @@ host_hardening_expected_tcp:
   - 3080     # bun (audio-waveform)
   - "4200%lo"   # bun (clawui)
   - "5000%lo"   # docker-proxy (roomler-registry, published on 127.0.0.1)
+  - "6379%lo"   # docker-proxy (a test database, published on 127.0.0.1)
+  - "27019%lo"  # docker-proxy (a test database, published on 127.0.0.1)
   - "8443%lo"   # haproxy K8s API LB
   - "9100%10.10.0.1"  # host metrics collector, on the tunnel address
   - "47989%lo"  # roomlerd
   - "5900:5963%lo"  # consoles of the throwaway test guests
-  # Published container ports. This list does NOT make a published port reachable or closed (it
-  # is forwarded to its container, never delivered to the host's INPUT chain);
-  # published-port-guard, below, is what closes them to the public interface. Publishing on
-  # 127.0.0.1 is still the cleanup:
-  - 6379     # docker-proxy (a test database)
-  - 27019    # docker-proxy (a test database)
   # global-eph, the throwaway server of LGR's field lanes (lgr-deploy vmtest/global-eph): one port
   # of this band per run, plain HTTP on the loopback and, for a run that serves the test guests on
   # zeus, TLS on the tunnel address. Its own table (inet lgr_global_eph) admits only the sources
@@ -85,8 +81,8 @@ host_hardening_expected_udp_ephemeral:
 # ports they publish is meant for the internet: published_port_guard_open_tcp / _udp stay empty,
 # so every published port is closed to the public interface, whichever container publishes it
 # next. The list below is for the second path only (the listener each published port has on the
-# host, which is what IPv6 reaches): keep it in step with `docker ps`.
-published_port_guard_host_tcp:
-  - 6379     # docker-proxy
-  - 27019    # docker-proxy
+# host, which is what IPv6 reaches): keep it in step with `docker ps`. A port published on
+# 127.0.0.1 or on the tunnel address gets its listener on that IPv4 address only, which IPv6
+# cannot reach, so it needs no entry; no container here publishes on any other address.
+published_port_guard_host_tcp: []
 
