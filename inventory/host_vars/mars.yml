@@ -57,6 +57,12 @@ host_hardening_expected_tcp:
   # 127.0.0.1 is still the cleanup:
   - 6379     # docker-proxy (a test database)
   - 27019    # docker-proxy (a test database)
+  # global-eph, the throwaway server of LGR's field lanes (lgr-deploy vmtest/global-eph): one port
+  # of this band per run, plain HTTP on the loopback and, for a run that serves the test guests on
+  # zeus, TLS on the tunnel address. Its own table (inet lgr_global_eph) admits only the sources
+  # that run names. The same port on any other address, or held by any other process, is reported.
+  - "47400:47499%lo@docker-proxy"
+  - "47400:47499%10.10.0.1@docker-proxy"
   # 3478 and 5349 are in neither list although the firewall opens them: the TURN server runs in
   # the cluster on the worker VM, and the host only forwards those ports to it (coturn-iptables),
   # so nothing on the host itself listens there. A host process that does is reported.
